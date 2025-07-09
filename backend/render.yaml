@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: padelmate-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.16
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: padelmate-db
+          property: connectionString
+
+databases:
+  - name: padelmate-db
+    databaseName: padelmate
+    user: padelmate_user
+    plan: free 
