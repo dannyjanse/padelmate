@@ -29,12 +29,15 @@ const CreateMatchNight: React.FC = () => {
     setLoading(true);
 
     try {
+      console.log('Submitting form data:', formData);
       const response = await matchNightsAPI.create(formData);
       console.log('Match night created:', response.data);
       
       // Redirect to the new match night
       navigate(`/match-night/${response.data.match_night.id}`);
     } catch (err: any) {
+      console.error('Error creating match night:', err);
+      console.error('Error response:', err.response);
       setError(err.response?.data?.error || 'Failed to create match night');
     } finally {
       setLoading(false);

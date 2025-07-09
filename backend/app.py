@@ -22,7 +22,7 @@ db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'auth.login'
+login_manager.login_view = None  # Disable redirect for API
 
 # Enable CORS
 CORS(app, supports_credentials=True)
@@ -41,6 +41,10 @@ app.register_blueprint(matches_bp, url_prefix='/api/matches')
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+@login_manager.unauthorized_handler
+def unauthorized():
+    return jsonify({'error': 'Authentication required'}), 401
 
 @app.route('/api/health')
 def health_check():

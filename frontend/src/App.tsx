@@ -5,6 +5,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import CreateMatchNight from './components/CreateMatchNight';
+import MatchNightDetail from './components/MatchNightDetail';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -24,6 +25,11 @@ function App() {
             <Route path="/create-match-night" element={
               <ProtectedRoute>
                 <CreateMatchNight />
+              </ProtectedRoute>
+            } />
+            <Route path="/match-night/:id" element={
+              <ProtectedRoute>
+                <MatchNightDetail />
               </ProtectedRoute>
             } />
             <Route path="/" element={<Navigate to="/login" replace />} />
