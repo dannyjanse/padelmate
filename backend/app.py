@@ -27,8 +27,10 @@ login_manager.login_view = 'auth.login'
 # Enable CORS
 CORS(app, supports_credentials=True)
 
-# Import models and routes
-from models import db, User, MatchNight, Participation, Match, MatchResult
+# Import models after db initialization
+from models import User, MatchNight, Participation, Match, MatchResult
+
+# Import routes after models
 from routes import auth_bp, match_nights_bp, matches_bp
 
 # Register blueprints

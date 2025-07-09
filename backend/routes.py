@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
-from models import db, User, MatchNight, Participation, Match, MatchResult
+from models import User, MatchNight, Participation, Match, MatchResult
 from schedule_generator import create_matches_for_night
+from app import db
 from datetime import datetime
 import json
 
