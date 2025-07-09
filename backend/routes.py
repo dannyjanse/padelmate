@@ -251,4 +251,17 @@ def get_match_result(match_id):
     if not result:
         return jsonify({'error': 'No result found for this match'}), 404
     
-    return jsonify({'result': result.to_dict()}), 200 
+    return jsonify({'result': result.to_dict()}), 200
+
+# Database initialization endpoint (for development/setup)
+@auth_bp.route('/init-db', methods=['POST'])
+def init_database():
+    """Initialize database tables (development only)"""
+    try:
+        db.create_all()
+        return jsonify({
+            'message': 'Database initialized successfully',
+            'tables': ['users', 'match_nights', 'participations', 'matches', 'match_results']
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'Database initialization failed: {str(e)}'}), 500 
