@@ -264,4 +264,19 @@ def init_database():
             'tables': ['users', 'match_nights', 'participations', 'matches', 'match_results']
         }), 200
     except Exception as e:
-        return jsonify({'error': f'Database initialization failed: {str(e)}'}), 500 
+        return jsonify({'error': f'Database initialization failed: {str(e)}'}), 500
+
+# Test endpoint without authentication
+@auth_bp.route('/test', methods=['GET'])
+def test_endpoint():
+    """Test endpoint without authentication"""
+    return jsonify({
+        'message': 'API is working!',
+        'status': 'success',
+        'endpoints': {
+            'health': '/api/health',
+            'register': '/api/auth/register',
+            'login': '/api/auth/login',
+            'init_db': '/api/auth/init-db'
+        }
+    }), 200 
