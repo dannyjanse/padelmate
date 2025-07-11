@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { matchNightsAPI, authAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import type { MatchNight, Match, User } from '../types';
 import { 
   ArrowLeft, 
@@ -13,7 +14,8 @@ import {
   Clock,
   UserPlus,
   UserMinus,
-  Edit
+  Edit,
+  LogOut
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
@@ -21,6 +23,7 @@ import { nl } from 'date-fns/locale';
 const MatchNightDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const [matchNight, setMatchNight] = useState<MatchNight | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -133,9 +136,13 @@ const MatchNightDetails = () => {
   };
 
   const isParticipating = () => {
-    if (!matchNight?.participants) return false;
-    // This would need to be implemented based on current user
-    return false;
+    if (!matchNight?.participants || !currentUser) return false;
+    return matchNight.participants.some(p => p.id === currentUser.id);
+  };
+
+  const isCreator = () => {
+    if (!matchNight || !currentUser) return false;
+    return matchNight.creator_id === currentUser.id;
   };
 
   const canGenerateSchedule = () => {
@@ -189,13 +196,16 @@ const MatchNightDetails = () => {
           </div>
         </div>
         
-        <button
-          onClick={() => navigate(`/match-nights/${id}/edit`)}
-          className="btn-secondary flex items-center space-x-2"
-        >
-          <Edit className="w-4 h-4" />
-          <span>Bewerken</span>
-        </button>
+        {/* Alleen creator kan bewerken */}
+        {isCreator() && (
+          <button
+            onClick={() => navigate(`/match-nights/${id}/edit`)}
+            className="btn-secondary flex items-center space-x-2"
+          >
+            <Edit className="w-4 h-4" />
+            <span>Bewerken</span>
+          </button>
+        )}
       </div>
 
       {/* Error message */}
@@ -240,26 +250,20 @@ const MatchNightDetails = () => {
 
       {/* Actions */}
       <div className="flex space-x-4">
-        {!isParticipating() ? (
-          <button
-            onClick={handleJoin}
-            disabled={joining}
-            className="btn-primary flex items-center space-x-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{joining ? 'Deelnemen...' : 'Deelnemen'}</span>
-          </button>
-        ) : (
+        {/* Afmeld knop - alleen voor deelnemers */}
+        {isParticipating() && (
           <button
             onClick={handleLeave}
             disabled={joining}
             className="btn-secondary flex items-center space-x-2"
           >
-            <span>{joining ? 'Verlaten...' : 'Verlaten'}</span>
+            <LogOut className="w-4 h-4" />
+            <span>{joining ? 'Afmelden...' : 'Afmelden'}</span>
           </button>
         )}
 
-        {canGenerateSchedule() && !matchNight.matches?.length && (
+        {/* Schema genereren - alleen voor creator */}
+        {isCreator() && canGenerateSchedule() && !matchNight.matches?.length && (
           <button
             onClick={handleGenerateSchedule}
             disabled={generatingSchedule}
@@ -271,42 +275,44 @@ const MatchNightDetails = () => {
         )}
       </div>
 
-      {/* Add Participant Section */}
-      <div className="card">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Deelnemer Toevoegen</h2>
-        <div className="flex space-x-4 items-end">
-          <div className="flex-1">
-            <label htmlFor="user-select" className="block text-sm font-medium text-gray-700 mb-2">
-              Selecteer Gebruiker
-            </label>
-            <select
-              id="user-select"
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-              className="input-field"
-              disabled={availableUsers.length === 0}
+      {/* Add Participant Section - alleen voor creator */}
+      {isCreator() && (
+        <div className="card">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Deelnemer Toevoegen</h2>
+          <div className="flex space-x-4 items-end">
+            <div className="flex-1">
+              <label htmlFor="user-select" className="block text-sm font-medium text-gray-700 mb-2">
+                Selecteer Gebruiker
+              </label>
+              <select
+                id="user-select"
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                className="input-field"
+                disabled={availableUsers.length === 0}
+              >
+                <option value="">Kies een gebruiker...</option>
+                {availableUsers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} ({user.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={handleAddParticipant}
+              disabled={!selectedUserId || addingParticipant || availableUsers.length === 0}
+              className="btn-primary flex items-center space-x-2"
             >
-              <option value="">Kies een gebruiker...</option>
-              {availableUsers.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name} ({user.email})
-                </option>
-              ))}
-            </select>
+              <UserPlus className="w-4 h-4" />
+              <span>{addingParticipant ? 'Toevoegen...' : 'Toevoegen'}</span>
+            </button>
           </div>
-          <button
-            onClick={handleAddParticipant}
-            disabled={!selectedUserId || addingParticipant || availableUsers.length === 0}
-            className="btn-primary flex items-center space-x-2"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>{addingParticipant ? 'Toevoegen...' : 'Toevoegen'}</span>
-          </button>
+          {availableUsers.length === 0 && (
+            <p className="text-sm text-gray-500 mt-2">Alle gebruikers zijn al toegevoegd aan deze avond.</p>
+          )}
         </div>
-        {availableUsers.length === 0 && (
-          <p className="text-sm text-gray-500 mt-2">Alle gebruikers zijn al toegevoegd aan deze avond.</p>
-        )}
-      </div>
+      )}
 
       {/* Participants */}
       <div className="card">
@@ -326,13 +332,16 @@ const MatchNightDetails = () => {
                     <p className="text-sm text-gray-500">{participant.email}</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleRemoveParticipant(participant.id)}
-                  className="text-red-600 hover:text-red-800 p-1"
-                  title="Verwijder deelnemer"
-                >
-                  <UserMinus className="w-4 h-4" />
-                </button>
+                {/* Alleen creator kan deelnemers verwijderen */}
+                {isCreator() && (
+                  <button
+                    onClick={() => handleRemoveParticipant(participant.id)}
+                    className="text-red-600 hover:text-red-800 p-1"
+                    title="Verwijder deelnemer"
+                  >
+                    <UserMinus className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             ))}
           </div>

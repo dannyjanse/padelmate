@@ -10,6 +10,8 @@ export interface MatchNight {
   date: string;
   location: string;
   num_courts: number;
+  creator_id: number;
+  creator?: User;
   created_at: string;
   participants_count: number;
   participants?: User[];
