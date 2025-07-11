@@ -74,9 +74,19 @@ def get_current_user():
 @match_nights_bp.route('/', methods=['GET'])
 @login_required
 def get_match_nights():
-    """Get all match nights"""
-    match_nights = MatchNight.query.order_by(MatchNight.date.desc()).all()
-    return jsonify({'match_nights': [mn.to_dict() for mn in match_nights]}), 200
+    """Get match nights for current user (created by user or user is participating)"""
+    # Get match nights created by the user
+    created_match_nights = MatchNight.query.filter_by(creator_id=current_user.id).all()
+    
+    # Get match nights where user is participating
+    participations = Participation.query.filter_by(user_id=current_user.id).all()
+    participating_match_nights = [p.match_night for p in participations]
+    
+    # Combine and remove duplicates
+    all_match_nights = list(set(created_match_nights + participating_match_nights))
+    all_match_nights.sort(key=lambda x: x.date, reverse=True)
+    
+    return jsonify({'match_nights': [mn.to_dict() for mn in all_match_nights]}), 200
 
 @match_nights_bp.route('/', methods=['POST'])
 @login_required
@@ -95,7 +105,8 @@ def create_match_night():
     match_night = MatchNight(
         date=date,
         location=data['location'],
-        num_courts=data.get('num_courts', 1)
+        num_courts=data.get('num_courts', 1),
+        creator_id=current_user.id
     )
     
     try:
@@ -116,8 +127,9 @@ def update_match_night(match_night_id):
     if not data:
         return jsonify({'error': 'No data provided'}), 400
     
-    # Check if user is the creator (for now, allow any authenticated user)
-    # In the future, you might want to add a creator_id field to MatchNight
+    # Check if user is the creator
+    if match_night.creator_id != current_user.id:
+        return jsonify({'error': 'Only the creator can update this match night'}), 403
     
     try:
         if 'date' in data:
@@ -148,8 +160,9 @@ def delete_match_night(match_night_id):
     """Delete a match night"""
     match_night = MatchNight.query.get_or_404(match_night_id)
     
-    # Check if user is the creator (for now, allow any authenticated user)
-    # In the future, you might want to add a creator_id field to MatchNight
+    # Check if user is the creator
+    if match_night.creator_id != current_user.id:
+        return jsonify({'error': 'Only the creator can delete this match night'}), 403
     
     try:
         # Delete all related data
@@ -169,6 +182,16 @@ def delete_match_night(match_night_id):
 def get_match_night(match_night_id):
     """Get specific match night with participants and matches"""
     match_night = MatchNight.query.get_or_404(match_night_id)
+    
+    # Check if user is the creator or a participant
+    is_creator = match_night.creator_id == current_user.id
+    is_participant = Participation.query.filter_by(
+        user_id=current_user.id,
+        match_night_id=match_night_id
+    ).first() is not None
+    
+    if not is_creator and not is_participant:
+        return jsonify({'error': 'Access denied. You are not a participant or creator of this match night'}), 403
     
     # Get participants
     participations = Participation.query.filter_by(match_night_id=match_night_id).all()
@@ -236,6 +259,10 @@ def leave_match_night(match_night_id):
 def generate_schedule(match_night_id):
     """Generate match schedule for a match night"""
     match_night = MatchNight.query.get_or_404(match_night_id)
+    
+    # Check if user is the creator
+    if match_night.creator_id != current_user.id:
+        return jsonify({'error': 'Only the creator can generate the schedule'}), 403
     
     # Get all participants
     participations = Participation.query.filter_by(match_night_id=match_night_id).all()
@@ -384,6 +411,10 @@ def add_participant(match_night_id):
     if not data or 'user_id' not in data:
         return jsonify({'error': 'User ID is required'}), 400
     
+    # Check if user is the creator
+    if match_night.creator_id != current_user.id:
+        return jsonify({'error': 'Only the creator can add participants'}), 403
+    
     user_id = data['user_id']
     
     # Check if user exists
@@ -426,6 +457,10 @@ def remove_participant(match_night_id):
     
     if not data or 'user_id' not in data:
         return jsonify({'error': 'User ID is required'}), 400
+    
+    # Check if user is the creator
+    if match_night.creator_id != current_user.id:
+        return jsonify({'error': 'Only the creator can remove participants'}), 403
     
     user_id = data['user_id']
     

@@ -44,9 +44,11 @@ class MatchNight(db.Model):
     date = db.Column(db.Date, nullable=False)
     location = db.Column(db.String(200), nullable=False)
     num_courts = db.Column(db.Integer, default=1)
+    creator_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
+    creator = db.relationship('User', backref='created_match_nights', lazy=True)
     participations = db.relationship('Participation', backref='match_night', lazy=True)
     matches = db.relationship('Match', backref='match_night', lazy=True)
     
@@ -56,6 +58,8 @@ class MatchNight(db.Model):
             'date': self.date.isoformat() if self.date else None,
             'location': self.location,
             'num_courts': self.num_courts,
+            'creator_id': self.creator_id,
+            'creator': self.creator.to_dict() if self.creator else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'participants_count': len(self.participations)
         }
