@@ -22,27 +22,28 @@ const Layout = () => {
                 <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold text-sm">P</span>
                 </div>
-                <span className="text-xl font-bold text-gray-900">King Of The Court</span>
+                <span className="text-lg sm:text-xl font-bold text-gray-900">King Of The Court</span>
               </Link>
             </div>
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <Link
                 to="/match-nights/new"
-                className="btn-primary flex items-center space-x-2"
+                className="btn-primary flex items-center space-x-2 text-sm sm:text-base"
               >
                 <Plus className="w-4 h-4" />
-                <span>Nieuwe Avond</span>
+                <span className="hidden sm:inline">Nieuwe Avond</span>
+                <span className="sm:hidden">+</span>
               </Link>
 
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700">Welkom, {user?.name}</span>
+              <div className="flex items-center space-x-2 sm:space-x-4">
+                <span className="text-xs sm:text-sm text-gray-700 hidden sm:inline">Welkom, {user?.name}</span>
                 <button
                   onClick={handleLogout}
-                  className="text-gray-500 hover:text-gray-700 flex items-center space-x-1"
+                  className="text-gray-500 hover:text-gray-700 flex items-center space-x-1 p-1"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>Uitloggen</span>
+                  <span className="hidden sm:inline">Uitloggen</span>
                 </button>
               </div>
             </div>
