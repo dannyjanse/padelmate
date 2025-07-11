@@ -22,7 +22,7 @@ const Layout = () => {
                 <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold text-sm">P</span>
                 </div>
-                <span className="text-xl font-bold text-gray-900">PadelMate</span>
+                <span className="text-xl font-bold text-gray-900">King Of The Court</span>
               </Link>
             </div>
 
