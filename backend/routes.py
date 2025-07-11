@@ -17,17 +17,22 @@ matches_bp = Blueprint('matches', __name__)
 def register():
     data = request.get_json()
     
-    if not data or not all(k in data for k in ('name', 'email', 'password')):
+    if not data or not all(k in data for k in ('name', 'password')):
         return jsonify({'error': 'Missing required fields'}), 400
     
-    # Check if user already exists
-    if User.query.filter_by(email=data['email']).first():
+    # Check if user already exists by name
+    if User.query.filter_by(name=data['name']).first():
+        return jsonify({'error': 'Username already taken'}), 400
+    
+    # Check if email is provided and if it already exists
+    email = data.get('email', '').strip()
+    if email and User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email already registered'}), 400
     
     # Create new user
     user = User(
         name=data['name'],
-        email=data['email']
+        email=email if email else None
     )
     user.set_password(data['password'])
     
@@ -43,16 +48,16 @@ def register():
 def login():
     data = request.get_json()
     
-    if not data or not all(k in data for k in ('email', 'password')):
-        return jsonify({'error': 'Missing email or password'}), 400
+    if not data or not all(k in data for k in ('username', 'password')):
+        return jsonify({'error': 'Missing username or password'}), 400
     
-    user = User.query.filter_by(email=data['email']).first()
+    user = User.query.filter_by(name=data['username']).first()
     
     if user and user.check_password(data['password']):
         login_user(user)
         return jsonify({'message': 'Login successful', 'user': user.to_dict()}), 200
     else:
-        return jsonify({'error': 'Invalid email or password'}), 401
+        return jsonify({'error': 'Invalid username or password'}), 401
 
 @auth_bp.route('/logout', methods=['POST'])
 @login_required

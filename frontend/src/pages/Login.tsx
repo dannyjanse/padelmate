@@ -7,7 +7,7 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -28,7 +28,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      await login(formData.email, formData.password);
+      await login(formData.username, formData.password);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login mislukt');
@@ -45,7 +45,7 @@ const Login = () => {
             <span className="text-white font-bold text-lg">P</span>
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Welkom bij PadelMate
+            Welkom bij King Of The Court
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Log in op je account
@@ -61,18 +61,18 @@ const Login = () => {
           
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email adres
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                Gebruikersnaam
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
                 required
                 className="input-field mt-1"
-                placeholder="jouw@email.com"
-                value={formData.email}
+                placeholder="Jouw gebruikersnaam"
+                value={formData.username}
                 onChange={handleChange}
               />
             </div>

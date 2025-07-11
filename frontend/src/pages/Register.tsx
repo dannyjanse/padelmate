@@ -42,7 +42,7 @@ const Register = () => {
     setLoading(true);
 
     try {
-      await register(formData.name, formData.email, formData.password);
+      await register(formData.name, formData.password, formData.email || undefined);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registratie mislukt');
@@ -62,7 +62,7 @@ const Register = () => {
             Maak je account aan
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Word lid van PadelMate
+            Word lid van King Of The Court
           </p>
         </div>
         
@@ -76,16 +76,16 @@ const Register = () => {
           <div className="space-y-4">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Naam
+                Gebruikersnaam
               </label>
               <input
                 id="name"
                 name="name"
                 type="text"
-                autoComplete="name"
+                autoComplete="username"
                 required
                 className="input-field mt-1"
-                placeholder="Jouw naam"
+                placeholder="Jouw gebruikersnaam"
                 value={formData.name}
                 onChange={handleChange}
               />
@@ -93,16 +93,15 @@ const Register = () => {
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email adres
+                Email adres (optioneel)
               </label>
               <input
                 id="email"
                 name="email"
                 type="email"
                 autoComplete="email"
-                required
                 className="input-field mt-1"
-                placeholder="jouw@email.com"
+                placeholder="jouw@email.com (optioneel)"
                 value={formData.email}
                 onChange={handleChange}
               />
