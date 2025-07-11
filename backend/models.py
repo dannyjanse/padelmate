@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 
 # Import db from app
-from app import db
+from extensions import db
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'

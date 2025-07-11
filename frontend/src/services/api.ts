@@ -1,20 +1,28 @@
 import axios from 'axios';
+import type { 
+  User, 
+  MatchNight, 
+  Match, 
+  MatchResult,
+  CreateMatchNightData,
+  SubmitMatchResultData,
+  LoginData,
+  RegisterData 
+} from '../types';
 
-const API_BASE_URL = 'https://padelmate-backend.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-// Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true, // Important for session cookies
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth headers if needed
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
-    // You can add auth headers here if needed
     return config;
   },
   (error) => {
@@ -22,12 +30,12 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Response interceptor
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Clear any stored auth data and redirect to login
+    // Alleen redirecten als het geen auth check is
+    if (error.response?.status === 401 && !error.config.url?.includes('/api/auth/me')) {
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
@@ -35,29 +43,29 @@ api.interceptors.response.use(
   }
 );
 
-// Auth API calls
+// Auth API
 export const authAPI = {
-  register: (data: { name: string; email: string; password: string }) =>
-    api.post('/api/auth/register', data),
+  register: (data: RegisterData) =>
+    api.post<{ message: string; user: User }>('/api/auth/register', data),
   
-  login: (data: { email: string; password: string }) =>
-    api.post('/api/auth/login', data),
+  login: (data: LoginData) =>
+    api.post<{ message: string; user: User }>('/api/auth/login', data),
   
   logout: () => api.post('/api/auth/logout'),
   
-  getCurrentUser: () => api.get('/api/auth/me'),
+  getCurrentUser: () => api.get<{ user: User }>('/api/auth/me'),
   
   initDatabase: () => api.post('/api/auth/init-db'),
 };
 
-// Match Nights API calls
+// Match Nights API
 export const matchNightsAPI = {
-  getAll: () => api.get('/api/match-nights/'),
+  getAll: () => api.get<{ match_nights: MatchNight[] }>('/api/match-nights/'),
   
-  create: (data: { date: string; location: string; num_courts?: number }) =>
-    api.post('/api/match-nights/', data),
+  create: (data: CreateMatchNightData) =>
+    api.post<{ message: string; match_night: MatchNight }>('/api/match-nights/', data),
   
-  getById: (id: number) => api.get(`/api/match-nights/${id}`),
+  getById: (id: number) => api.get<MatchNight>(`/api/match-nights/${id}`),
   
   join: (id: number) => api.post(`/api/match-nights/${id}/join`),
   
@@ -67,12 +75,12 @@ export const matchNightsAPI = {
     api.post(`/api/match-nights/${id}/generate-schedule`, { schedule_type: scheduleType }),
 };
 
-// Matches API calls
+// Matches API
 export const matchesAPI = {
-  submitResult: (id: number, data: { score?: string; winner_ids?: number[] }) =>
+  submitResult: (id: number, data: SubmitMatchResultData) =>
     api.post(`/api/matches/${id}/result`, data),
   
-  getResult: (id: number) => api.get(`/api/matches/${id}/result`),
+  getResult: (id: number) => api.get<MatchResult>(`/api/matches/${id}/result`),
 };
 
 // Health check

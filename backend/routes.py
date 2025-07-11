@@ -3,7 +3,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
 from models import User, MatchNight, Participation, Match, MatchResult
 from schedule_generator import create_matches_for_night
-from app import db
+from extensions import db
 from datetime import datetime
 import json
 
@@ -256,14 +256,50 @@ def get_match_result(match_id):
 # Database initialization endpoint (for development/setup)
 @auth_bp.route('/init-db', methods=['POST'])
 def init_database():
-    """Initialize database tables (development only)"""
+    """Initialize database tables and create test users (development only)"""
     try:
+        # Create all tables
         db.create_all()
+        
+        # Check if test users already exist
+        existing_user = User.query.filter_by(email='test@example.com').first()
+        if existing_user:
+            return jsonify({
+                'message': 'Database already initialized with test users',
+                'test_users': [
+                    {'email': 'test@example.com', 'password': 'password'},
+                    {'email': 'admin@example.com', 'password': 'password'}
+                ]
+            }), 200
+        
+        # Create test users
+        test_user = User(
+            name='Test User',
+            email='test@example.com'
+        )
+        test_user.set_password('password')
+        
+        admin_user = User(
+            name='Admin User',
+            email='admin@example.com'
+        )
+        admin_user.set_password('password')
+        
+        # Add users to database
+        db.session.add(test_user)
+        db.session.add(admin_user)
+        db.session.commit()
+        
         return jsonify({
-            'message': 'Database initialized successfully',
-            'tables': ['users', 'match_nights', 'participations', 'matches', 'match_results']
+            'message': 'Database initialized successfully with test users',
+            'test_users': [
+                {'email': 'test@example.com', 'password': 'password'},
+                {'email': 'admin@example.com', 'password': 'password'}
+            ]
         }), 200
+        
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': f'Database initialization failed: {str(e)}'}), 500
 
 # Test endpoint without authentication
@@ -279,4 +315,22 @@ def test_endpoint():
             'login': '/api/auth/login',
             'init_db': '/api/auth/init-db'
         }
-    }), 200 
+    }), 200
+
+# Simple database check endpoint
+@auth_bp.route('/check-db', methods=['GET'])
+def check_database():
+    """Check if database is working and has users"""
+    try:
+        user_count = User.query.count()
+        return jsonify({
+            'message': 'Database is working',
+            'user_count': user_count,
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'message': 'Database error',
+            'error': str(e),
+            'status': 'error'
+        }), 500 

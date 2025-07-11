@@ -6,6 +6,8 @@ from flask_migrate import Migrate
 import os
 from dotenv import load_dotenv
 
+from extensions import db
+
 # Load environment variables
 load_dotenv()
 
@@ -18,8 +20,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:/
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize extensions
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = None  # Disable redirect for API
@@ -37,6 +37,10 @@ from routes import auth_bp, match_nights_bp, matches_bp
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(match_nights_bp, url_prefix='/api/match-nights')
 app.register_blueprint(matches_bp, url_prefix='/api/matches')
+
+# Initialize the database
+db.init_app(app)
+migrate = Migrate(app, db)
 
 @login_manager.user_loader
 def load_user(user_id):

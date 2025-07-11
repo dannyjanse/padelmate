@@ -1,44 +1,39 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import Login from './components/Login';
-import Register from './components/Register';
-import Dashboard from './components/Dashboard';
-import CreateMatchNight from './components/CreateMatchNight';
-import MatchNightDetail from './components/MatchNightDetail';
-import ProtectedRoute from './components/ProtectedRoute';
-import './App.css';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './contexts/AuthContext'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import Dashboard from './pages/Dashboard'
+import MatchNightDetails from './pages/MatchNightDetails'
+import CreateMatchNight from './pages/CreateMatchNight'
+import Layout from './components/Layout'
 
 function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="App">
+        <div className="min-h-screen bg-gray-50">
           <Routes>
+            {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/dashboard" element={
+            
+            {/* Protected routes */}
+            <Route path="/" element={
               <ProtectedRoute>
-                <Dashboard />
+                <Layout />
               </ProtectedRoute>
-            } />
-            <Route path="/create-match-night" element={
-              <ProtectedRoute>
-                <CreateMatchNight />
-              </ProtectedRoute>
-            } />
-            <Route path="/match-night/:id" element={
-              <ProtectedRoute>
-                <MatchNightDetail />
-              </ProtectedRoute>
-            } />
-            <Route path="/" element={<Navigate to="/login" replace />} />
-            {/* Add more routes here as we build them */}
+            }>
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="match-nights/new" element={<CreateMatchNight />} />
+              <Route path="match-nights/:id" element={<MatchNightDetails />} />
+            </Route>
           </Routes>
         </div>
       </Router>
     </AuthProvider>
-  );
+  )
 }
 
-export default App;
+export default App 

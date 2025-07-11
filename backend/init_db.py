@@ -4,7 +4,8 @@ Database initialization script for PadelMate
 Run this script to create all database tables
 """
 
-from app import app, db
+from extensions import db
+from app import app
 from models import User, MatchNight, Participation, Match, MatchResult
 
 def init_database():
