@@ -56,6 +56,8 @@ export const authAPI = {
   getCurrentUser: () => api.get<{ user: User }>('/api/auth/me'),
   
   initDatabase: () => api.post('/api/auth/init-db'),
+  
+  getAllUsers: () => api.get<{ users: User[] }>('/api/auth/users'),
 };
 
 // Match Nights API
@@ -67,12 +69,23 @@ export const matchNightsAPI = {
   
   getById: (id: number) => api.get<MatchNight>(`/api/match-nights/${id}`),
   
+  update: (id: number, data: CreateMatchNightData) =>
+    api.put<{ message: string; match_night: MatchNight }>(`/api/match-nights/${id}`, data),
+  
+  delete: (id: number) => api.delete(`/api/match-nights/${id}`),
+  
   join: (id: number) => api.post(`/api/match-nights/${id}/join`),
   
   leave: (id: number) => api.post(`/api/match-nights/${id}/leave`),
   
   generateSchedule: (id: number, scheduleType?: string) =>
     api.post(`/api/match-nights/${id}/generate-schedule`, { schedule_type: scheduleType }),
+  
+  addParticipant: (matchNightId: number, userId: number) =>
+    api.post(`/api/match-nights/${matchNightId}/add-participant`, { user_id: userId }),
+  
+  removeParticipant: (matchNightId: number, userId: number) =>
+    api.post(`/api/match-nights/${matchNightId}/remove-participant`, { user_id: userId }),
 };
 
 // Matches API

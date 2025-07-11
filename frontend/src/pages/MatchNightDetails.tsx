@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { matchNightsAPI } from '../services/api';
+import { matchNightsAPI, authAPI } from '../services/api';
 import type { MatchNight, Match, User } from '../types';
 import { 
   ArrowLeft, 
@@ -10,7 +10,10 @@ import {
   Plus, 
   Play,
   Trophy,
-  Clock
+  Clock,
+  UserPlus,
+  UserMinus,
+  Edit
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
@@ -19,14 +22,18 @@ const MatchNightDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [matchNight, setMatchNight] = useState<MatchNight | null>(null);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [joining, setJoining] = useState(false);
   const [generatingSchedule, setGeneratingSchedule] = useState(false);
+  const [addingParticipant, setAddingParticipant] = useState(false);
 
   useEffect(() => {
     if (id) {
       fetchMatchNight();
+      fetchAllUsers();
     }
   }, [id]);
 
@@ -40,6 +47,15 @@ const MatchNightDetails = () => {
       console.error('Error fetching match night:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAllUsers = async () => {
+    try {
+      const response = await authAPI.getAllUsers();
+      setAllUsers(response.data.users);
+    } catch (err: any) {
+      console.error('Error fetching users:', err);
     }
   };
 
@@ -64,6 +80,34 @@ const MatchNightDetails = () => {
       setError(err.response?.data?.error || 'Fout bij het verlaten');
     } finally {
       setJoining(false);
+    }
+  };
+
+  const handleAddParticipant = async () => {
+    if (!selectedUserId) {
+      setError('Selecteer een gebruiker');
+      return;
+    }
+
+    try {
+      setAddingParticipant(true);
+      await matchNightsAPI.addParticipant(parseInt(id!), parseInt(selectedUserId));
+      await fetchMatchNight(); // Refresh data
+      setSelectedUserId(''); // Reset selection
+      setError(''); // Clear any previous errors
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fout bij het toevoegen van deelnemer');
+    } finally {
+      setAddingParticipant(false);
+    }
+  };
+
+  const handleRemoveParticipant = async (userId: number) => {
+    try {
+      await matchNightsAPI.removeParticipant(parseInt(id!), userId);
+      await fetchMatchNight(); // Refresh data
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fout bij het verwijderen van deelnemer');
     }
   };
 
@@ -99,6 +143,11 @@ const MatchNightDetails = () => {
     const participantCount = matchNight.participants.length;
     return participantCount >= 4 && participantCount % 4 === 0;
   };
+
+  // Filter out users who are already participating
+  const availableUsers = allUsers.filter(user => 
+    !matchNight?.participants?.some(p => p.id === user.id)
+  );
 
   if (loading) {
     return (
@@ -139,6 +188,14 @@ const MatchNightDetails = () => {
             </div>
           </div>
         </div>
+        
+        <button
+          onClick={() => navigate(`/match-nights/${id}/edit`)}
+          className="btn-secondary flex items-center space-x-2"
+        >
+          <Edit className="w-4 h-4" />
+          <span>Bewerken</span>
+        </button>
       </div>
 
       {/* Error message */}
@@ -214,22 +271,68 @@ const MatchNightDetails = () => {
         )}
       </div>
 
+      {/* Add Participant Section */}
+      <div className="card">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Deelnemer Toevoegen</h2>
+        <div className="flex space-x-4 items-end">
+          <div className="flex-1">
+            <label htmlFor="user-select" className="block text-sm font-medium text-gray-700 mb-2">
+              Selecteer Gebruiker
+            </label>
+            <select
+              id="user-select"
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="input-field"
+              disabled={availableUsers.length === 0}
+            >
+              <option value="">Kies een gebruiker...</option>
+              {availableUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name} ({user.email})
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={handleAddParticipant}
+            disabled={!selectedUserId || addingParticipant || availableUsers.length === 0}
+            className="btn-primary flex items-center space-x-2"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>{addingParticipant ? 'Toevoegen...' : 'Toevoegen'}</span>
+          </button>
+        </div>
+        {availableUsers.length === 0 && (
+          <p className="text-sm text-gray-500 mt-2">Alle gebruikers zijn al toegevoegd aan deze avond.</p>
+        )}
+      </div>
+
       {/* Participants */}
       <div className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Deelnemers</h2>
         {matchNight.participants && matchNight.participants.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {matchNight.participants.map((participant: User) => (
-              <div key={participant.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">
-                    {participant.name.charAt(0).toUpperCase()}
-                  </span>
+              <div key={participant.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm font-medium">
+                      {participant.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{participant.name}</p>
+                    <p className="text-sm text-gray-500">{participant.email}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium text-gray-900">{participant.name}</p>
-                  <p className="text-sm text-gray-500">{participant.email}</p>
-                </div>
+                <button
+                  onClick={() => handleRemoveParticipant(participant.id)}
+                  className="text-red-600 hover:text-red-800 p-1"
+                  title="Verwijder deelnemer"
+                >
+                  <UserMinus className="w-4 h-4" />
+                </button>
               </div>
             ))}
           </div>

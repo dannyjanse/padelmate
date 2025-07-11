@@ -101,6 +101,64 @@ def create_match_night():
         db.session.rollback()
         return jsonify({'error': 'Failed to create match night'}), 500
 
+@match_nights_bp.route('/<int:match_night_id>', methods=['PUT'])
+@login_required
+def update_match_night(match_night_id):
+    """Update a match night"""
+    match_night = MatchNight.query.get_or_404(match_night_id)
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    # Check if user is the creator (for now, allow any authenticated user)
+    # In the future, you might want to add a creator_id field to MatchNight
+    
+    try:
+        if 'date' in data:
+            date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+            match_night.date = date
+        
+        if 'location' in data:
+            match_night.location = data['location']
+        
+        if 'num_courts' in data:
+            match_night.num_courts = data['num_courts']
+        
+        db.session.commit()
+        return jsonify({
+            'message': 'Match night updated successfully',
+            'match_night': match_night.to_dict()
+        }), 200
+        
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update match night'}), 500
+
+@match_nights_bp.route('/<int:match_night_id>', methods=['DELETE'])
+@login_required
+def delete_match_night(match_night_id):
+    """Delete a match night"""
+    match_night = MatchNight.query.get_or_404(match_night_id)
+    
+    # Check if user is the creator (for now, allow any authenticated user)
+    # In the future, you might want to add a creator_id field to MatchNight
+    
+    try:
+        # Delete all related data
+        Participation.query.filter_by(match_night_id=match_night_id).delete()
+        Match.query.filter_by(match_night_id=match_night_id).delete()
+        db.session.delete(match_night)
+        db.session.commit()
+        
+        return jsonify({'message': 'Match night deleted successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to delete match night'}), 500
+
 @match_nights_bp.route('/<int:match_night_id>', methods=['GET'])
 @login_required
 def get_match_night(match_night_id):
@@ -301,6 +359,87 @@ def init_database():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Database initialization failed: {str(e)}'}), 500
+
+# Get all users (for adding participants)
+@auth_bp.route('/users', methods=['GET'])
+@login_required
+def get_all_users():
+    """Get all users for adding to match nights"""
+    users = User.query.all()
+    return jsonify({'users': [user.to_dict() for user in users]}), 200
+
+# Add participant to match night
+@match_nights_bp.route('/<int:match_night_id>/add-participant', methods=['POST'])
+@login_required
+def add_participant(match_night_id):
+    """Add a participant to a match night"""
+    match_night = MatchNight.query.get_or_404(match_night_id)
+    data = request.get_json()
+    
+    if not data or 'user_id' not in data:
+        return jsonify({'error': 'User ID is required'}), 400
+    
+    user_id = data['user_id']
+    
+    # Check if user exists
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    # Check if already participating
+    existing_participation = Participation.query.filter_by(
+        user_id=user_id,
+        match_night_id=match_night_id
+    ).first()
+    
+    if existing_participation:
+        return jsonify({'error': 'User is already participating in this match night'}), 400
+    
+    participation = Participation(
+        user_id=user_id,
+        match_night_id=match_night_id
+    )
+    
+    try:
+        db.session.add(participation)
+        db.session.commit()
+        return jsonify({
+            'message': f'Successfully added {user.name} to match night',
+            'participation': participation.to_dict()
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to add participant'}), 500
+
+# Remove participant from match night
+@match_nights_bp.route('/<int:match_night_id>/remove-participant', methods=['POST'])
+@login_required
+def remove_participant(match_night_id):
+    """Remove a participant from a match night"""
+    match_night = MatchNight.query.get_or_404(match_night_id)
+    data = request.get_json()
+    
+    if not data or 'user_id' not in data:
+        return jsonify({'error': 'User ID is required'}), 400
+    
+    user_id = data['user_id']
+    
+    # Find participation
+    participation = Participation.query.filter_by(
+        user_id=user_id,
+        match_night_id=match_night_id
+    ).first()
+    
+    if not participation:
+        return jsonify({'error': 'User is not participating in this match night'}), 400
+    
+    try:
+        db.session.delete(participation)
+        db.session.commit()
+        return jsonify({'message': 'Successfully removed participant from match night'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to remove participant'}), 500
 
 # Test endpoint without authentication
 @auth_bp.route('/test', methods=['GET'])

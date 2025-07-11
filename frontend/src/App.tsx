@@ -6,6 +6,7 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import MatchNightDetails from './pages/MatchNightDetails'
 import CreateMatchNight from './pages/CreateMatchNight'
+import EditMatchNight from './pages/EditMatchNight'
 import Layout from './components/Layout'
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="match-nights/new" element={<CreateMatchNight />} />
               <Route path="match-nights/:id" element={<MatchNightDetails />} />
+              <Route path="match-nights/:id/edit" element={<EditMatchNight />} />
             </Route>
           </Routes>
         </div>
