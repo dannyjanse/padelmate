@@ -1163,7 +1163,16 @@ def clear_matches(match_night_id):
         return jsonify({'error': 'Only the creator can clear matches'}), 403
     
     try:
-        # Delete all matches for this match night
+        # First, get all matches for this match night
+        matches = Match.query.filter_by(match_night_id=match_night_id).all()
+        match_ids = [match.id for match in matches]
+        
+        # Delete all match results for these matches first
+        match_results_deleted = 0
+        if match_ids:
+            match_results_deleted = MatchResult.query.filter(MatchResult.match_id.in_(match_ids)).delete()
+        
+        # Now delete all matches for this match night
         matches_deleted = Match.query.filter_by(match_night_id=match_night_id).delete()
         
         # Also delete any game schemas
@@ -1172,8 +1181,9 @@ def clear_matches(match_night_id):
         db.session.commit()
         
         return jsonify({
-            'message': f'Cleared {matches_deleted} matches and {game_schemas_deleted} game schemas',
+            'message': f'Cleared {matches_deleted} matches, {match_results_deleted} match results, and {game_schemas_deleted} game schemas',
             'matches_deleted': matches_deleted,
+            'match_results_deleted': match_results_deleted,
             'game_schemas_deleted': game_schemas_deleted
         }), 200
         
