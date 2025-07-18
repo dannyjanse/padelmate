@@ -1,174 +1,175 @@
-# 🚀 PadelMate Deployment Guide
+# 🚀 PadelMate Deployment Guide - Render.com
 
-## Render Deployment
+## 📋 Overzicht
 
-### Stap 1: GitHub Repository
-```bash
-# Initialiseer Git repository
-git init
-git add .
-git commit -m "Initial commit: PadelMate backend setup"
+Deze guide helpt je om de PadelMate app live te zetten op Render.com. De app bestaat uit:
+- **Backend**: Flask API (Python)
+- **Frontend**: React app (TypeScript)
+- **Database**: PostgreSQL
 
-# Maak GitHub repository aan en push
-git remote add origin https://github.com/yourusername/padelmate.git
-git push -u origin main
+## 🛠️ Voorbereiding
+
+### 1. Repository Setup
+Zorg ervoor dat je code in een Git repository staat (GitHub, GitLab, etc.)
+
+### 2. Environment Variables
+De volgende environment variables worden automatisch geconfigureerd:
+- `SECRET_KEY`: Automatisch gegenereerd door Render
+- `DATABASE_URL`: Automatisch gekoppeld aan PostgreSQL database
+- `FLASK_ENV`: production
+- `FLASK_DEBUG`: false
+
+## 🚀 Deployment Stappen
+
+### Stap 1: Render.com Account
+1. Ga naar [render.com](https://render.com)
+2. Maak een account aan of log in
+3. Verbind je Git repository
+
+### Stap 2: Database Deployen
+1. Klik op "New" → "PostgreSQL"
+2. Configureer:
+   - **Name**: `padelmate-db`
+   - **Database**: `padelmate`
+   - **User**: `padelmate_user`
+   - **Plan**: Free (voor MVP)
+
+### Stap 3: Backend Deployen
+1. Klik op "New" → "Web Service"
+2. Verbind je Git repository
+3. Configureer:
+   - **Name**: `padelmate-backend`
+   - **Environment**: Python
+   - **Build Command**: `cd backend && pip install -r ../requirements.txt`
+   - **Start Command**: `cd backend && gunicorn app:app --bind 0.0.0.0:$PORT`
+   - **Plan**: Free
+
+### Stap 4: Frontend Deployen
+1. Klik op "New" → "Static Site"
+2. Verbind je Git repository
+3. Configureer:
+   - **Name**: `padelmate-frontend`
+   - **Build Command**: `cd frontend && npm install && npm run build`
+   - **Publish Directory**: `frontend/dist`
+   - **Plan**: Free
+
+### Stap 5: Environment Variables Instellen
+
+#### Backend Environment Variables:
+```
+PYTHON_VERSION=3.9.16
+SECRET_KEY=[auto-generated]
+DATABASE_URL=[from database]
+FLASK_ENV=production
+FLASK_DEBUG=false
 ```
 
-### Stap 2: Render Setup
-
-1. **Ga naar [Render.com](https://render.com)**
-2. **Log in met je GitHub account**
-3. **Klik "New +" → "Blueprint"**
-4. **Connect je GitHub repository**
-5. **Render zal automatisch detecteren:**
-   - `render.yaml` configuratie
-   - Python backend
-   - PostgreSQL database
-
-### Stap 3: Environment Variables
-
-Render zal automatisch instellen:
-- `SECRET_KEY`: Auto-generated
-- `DATABASE_URL`: Auto-connected to PostgreSQL
-- `PYTHON_VERSION`: 3.9.16
-
-### Stap 4: Database Migratie
-
-Na deployment, voer database migraties uit:
-
-```bash
-# Via Render Shell of SSH
-flask db init
-flask db migrate -m "Initial migration"
-flask db upgrade
+#### Frontend Environment Variables:
+```
+VITE_API_URL=https://padelmate-backend.onrender.com
 ```
 
-### Stap 5: Test de API
+## 🔧 Post-Deployment Setup
+
+### 1. Database Initialisatie
+Na de eerste deployment moet je de database initialiseren:
 
 ```bash
-# Test health endpoint
-curl https://your-app-name.onrender.com/api/health
-
-# Test registratie
-curl -X POST https://your-app-name.onrender.com/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Test User","email":"test@example.com","password":"password123"}'
+# Via Render.com dashboard:
+# Ga naar je backend service → "Shell"
+# Voer uit:
+python init_db.py
 ```
 
-## Lokale Development
+### 2. Test Users Aanmaken
+De app maakt automatisch test users aan bij de eerste login:
+- Danny (password: password)
+- Branko (password: password)
+- Tukkie (password: password)
+- Michiel (password: password)
+- Jeroen (password: password)
+- Joost (password: password)
 
-### Backend
-```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate  # Windows
-pip install -r requirements.txt
-flask run
-```
+## 🌐 URLs
 
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
+Na deployment krijg je:
+- **Frontend**: `https://padelmate-frontend.onrender.com`
+- **Backend**: `https://padelmate-backend.onrender.com`
+- **Database**: Automatisch gekoppeld
 
-## API Endpoints
+## 🔍 Troubleshooting
 
-### Authentication
-- `POST /api/auth/register` - Registreer nieuwe gebruiker
-- `POST /api/auth/login` - Login
-- `POST /api/auth/logout` - Logout
-- `GET /api/auth/me` - Huidige gebruiker
+### Veelvoorkomende Problemen:
 
-### Match Nights
-- `GET /api/match-nights/` - Alle speelavonden
-- `POST /api/match-nights/` - Nieuwe speelavond
-- `GET /api/match-nights/<id>` - Speelavond details
-- `POST /api/match-nights/<id>/join` - Deelnemen
-- `POST /api/match-nights/<id>/leave` - Uitschrijven
-- `POST /api/match-nights/<id>/generate-schedule` - Schema genereren
+#### 1. Build Fails
+- Controleer of alle dependencies in `requirements.txt` staan
+- Zorg dat `package.json` correct is geconfigureerd
 
-### Matches
-- `POST /api/matches/<id>/result` - Score invoeren
-- `GET /api/matches/<id>/result` - Score ophalen
+#### 2. Database Connection Issues
+- Controleer of `DATABASE_URL` correct is ingesteld
+- Zorg dat de database service draait
 
-## Database Schema
+#### 3. CORS Issues
+- Backend heeft CORS geconfigureerd voor productie
+- Frontend gebruikt de juiste API URL
 
-```sql
--- Users
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(120) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+#### 4. Static Files
+- Zorg dat `logo.png` in de `frontend/public/` map staat
+- Build process kopieert automatisch naar `dist/`
 
--- Match Nights
-CREATE TABLE match_nights (
-    id SERIAL PRIMARY KEY,
-    date DATE NOT NULL,
-    location VARCHAR(200) NOT NULL,
-    num_courts INTEGER DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+## 📊 Monitoring
 
--- Participations
-CREATE TABLE participations (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
-    match_night_id INTEGER REFERENCES match_nights(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, match_night_id)
-);
+### Render.com Dashboard
+- **Logs**: Bekijk real-time logs
+- **Metrics**: CPU, memory usage
+- **Health Checks**: Automatische status monitoring
 
--- Matches
-CREATE TABLE matches (
-    id SERIAL PRIMARY KEY,
-    match_night_id INTEGER REFERENCES match_nights(id),
-    player1_id INTEGER REFERENCES users(id),
-    player2_id INTEGER REFERENCES users(id),
-    player3_id INTEGER REFERENCES users(id),
-    player4_id INTEGER REFERENCES users(id),
-    round INTEGER NOT NULL,
-    court INTEGER NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+### Database Monitoring
+- **Connection Pool**: Automatisch geconfigureerd
+- **Backups**: Automatische dagelijkse backups (paid plans)
 
--- Match Results
-CREATE TABLE match_results (
-    id SERIAL PRIMARY KEY,
-    match_id INTEGER REFERENCES matches(id),
-    score VARCHAR(50),
-    winner_ids TEXT, -- JSON array
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+## 🔄 Updates
 
-## Troubleshooting
+### Code Updates
+1. Push nieuwe code naar je Git repository
+2. Render detecteert automatisch wijzigingen
+3. Automatische rebuild en deployment
 
-### Common Issues
+### Environment Variables
+1. Ga naar service dashboard
+2. "Environment" tab
+3. Voeg/update variables toe
 
-1. **Database Connection Error**
-   - Check `DATABASE_URL` in Render environment
-   - Ensure PostgreSQL service is running
+## 💰 Kosten
 
-2. **CORS Errors**
-   - Frontend URL moet toegevoegd zijn aan CORS origins
-   - Check `CORS_ORIGINS` environment variable
+### Free Tier (MVP):
+- **Backend**: 750 uur/maand
+- **Frontend**: Onbeperkt
+- **Database**: 90 dagen trial
 
-3. **Import Errors**
-   - Ensure all dependencies in `requirements.txt`
-   - Check Python version compatibility
+### Paid Plans:
+- **Backend**: $7/maand voor altijd online
+- **Database**: $7/maand voor persistent storage
 
-4. **Authentication Issues**
-   - Verify `SECRET_KEY` is set
-   - Check session configuration
+## 🚀 Next Steps
 
-### Logs bekijken
-```bash
-# Render dashboard → Services → Logs
-# Of via CLI
-render logs --service padelmate-backend
-``` 
+### Na Live Deployment:
+1. **Test alle functionaliteiten**
+2. **Configureer custom domain** (optioneel)
+3. **Setup monitoring alerts**
+4. **Plan voor scaling** (indien nodig)
+
+### Performance Tips:
+- **CDN**: Render gebruikt automatisch CDN voor static files
+- **Caching**: Implementeer caching voor betere performance
+- **Database Indexes**: Optimaliseer queries
+
+## 📞 Support
+
+- **Render.com Docs**: [docs.render.com](https://docs.render.com)
+- **Community**: Render Discord/Forum
+- **Status**: [status.render.com](https://status.render.com)
+
+---
+
+**🎉 Gefeliciteerd! Je PadelMate app is nu live!** 
