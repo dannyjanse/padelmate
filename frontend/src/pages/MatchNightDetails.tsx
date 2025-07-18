@@ -37,7 +37,7 @@ const MatchNightDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [joining, setJoining] = useState(false);
-  const [generatingSchedule, setGeneratingSchedule] = useState(false);
+
   const [addingParticipant, setAddingParticipant] = useState(false);
   const [showGameModal, setShowGameModal] = useState(false);
   const [startingGame, setStartingGame] = useState(false);
@@ -52,9 +52,8 @@ const MatchNightDetails = () => {
   const [completingGame, setCompletingGame] = useState(false);
   const [recalculatingStats, setRecalculatingStats] = useState(false);
   const [fixingSchema, setFixingSchema] = useState(false);
-  const [showTransferCreatorModal, setShowTransferCreatorModal] = useState(false);
-  const [transferringCreator, setTransferringCreator] = useState(false);
-  const [newCreatorId, setNewCreatorId] = useState<string>('');
+
+
   const [resultData, setResultData] = useState({
     team1_games: 0,
     team2_games: 0,
@@ -187,23 +186,7 @@ const MatchNightDetails = () => {
     }
   };
 
-  const handleTransferCreator = async () => {
-    if (!matchNight || !newCreatorId) return;
-    
-    setTransferringCreator(true);
-    try {
-      const response = await matchNightsAPI.transferCreator(parseInt(id!), parseInt(newCreatorId));
-      if (response.status === 200) {
-        // Refresh the page to show updated creator
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error('Failed to transfer creator:', error);
-      setError('Failed to transfer creator rights');
-    } finally {
-      setTransferringCreator(false);
-    }
-  };
+
 
   const handleAddResult = (match: Match) => {
     setSelectedMatch(match);
@@ -333,17 +316,7 @@ const MatchNightDetails = () => {
     }
   };
 
-  const handleGenerateSchedule = async () => {
-    try {
-      setGeneratingSchedule(true);
-      await matchNightsAPI.generateSchedule(parseInt(id!));
-      await fetchMatchNight(); // Refresh data
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Fout bij het genereren van schema');
-    } finally {
-      setGeneratingSchedule(false);
-    }
-  };
+
 
   const handleStartGame = async (gameMode: string) => {
     setStartingGame(true);
@@ -414,11 +387,7 @@ const MatchNightDetails = () => {
     return matchNight.creator_id === currentUser.id;
   };
 
-  const canGenerateSchedule = () => {
-    if (!matchNight?.participants) return false;
-    const participantCount = matchNight.participants.length;
-    return participantCount >= 4 && participantCount % 4 === 0;
-  };
+
 
   const isGameCompleted = () => {
     return matchNight?.game_status === 'completed';
@@ -593,40 +562,9 @@ const MatchNightDetails = () => {
             </button>
           )}
 
-          {/* Transfer creator button - alleen voor creator */}
-          {isCreator() && !isGameCompleted() && (
-            <button
-              onClick={() => setShowTransferCreatorModal(true)}
-              className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
-            >
-              <Crown className="w-4 h-4" />
-              <span>Creator Overdragen</span>
-            </button>
-          )}
 
-          {/* Afmeld knop - alleen voor deelnemers, niet tijdens actief spel */}
-          {isParticipating() && !gameStatus?.game_active && (
-            <button
-              onClick={handleLeave}
-              disabled={joining}
-              className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>{joining ? 'Afmelden...' : 'Afmelden'}</span>
-            </button>
-          )}
 
-          {/* Schema genereren - alleen voor creator */}
-          {isCreator() && canGenerateSchedule() && !matchNight.matches?.length && (
-            <button
-              onClick={handleGenerateSchedule}
-              disabled={generatingSchedule}
-              className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
-            >
-              <Clock className="w-4 h-4" />
-              <span>{generatingSchedule ? 'Genereren...' : 'Schema Genereren'}</span>
-            </button>
-          )}
+
         </div>
       )}
 
@@ -748,11 +686,11 @@ const MatchNightDetails = () => {
 
 
 
-      {/* Matches */}
-      <div className="card">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Wedstrijden</h2>
-        
-        {matchNight.matches && matchNight.matches.length > 0 ? (
+      {/* Matches - alleen tonen als er wedstrijden zijn */}
+      {matchNight.matches && matchNight.matches.length > 0 && (
+        <div className="card">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Wedstrijden</h2>
+          
           <div className="space-y-4">
             {matchNight.matches.map((match: Match) => (
               <div key={match.id} className="border rounded-lg p-4">
@@ -821,18 +759,8 @@ const MatchNightDetails = () => {
               </div>
             ))}
           </div>
-        ) : (
-          <div className="text-center py-8">
-            <Play className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Geen wedstrijden</h3>
-            <p className="text-gray-500">
-              {gameStatus?.game_active 
-                ? 'Wedstrijden worden nog geladen...' 
-                : 'Start een spel om wedstrijden te genereren'}
-            </p>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Game Modal */}
       {showGameModal && (
@@ -1014,80 +942,7 @@ const MatchNightDetails = () => {
         </div>
       )}
 
-      {/* Transfer Creator Modal */}
-      {showTransferCreatorModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Creator Overdragen
-                </h2>
-                <button
-                  onClick={() => setShowTransferCreatorModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
 
-              <div className="space-y-4">
-                <div className="p-3 bg-blue-50 rounded">
-                  <p className="text-sm text-blue-900">
-                    <strong>Let op:</strong> Door je creator rechten over te dragen verlies je de controle over deze padelavond. 
-                    De nieuwe creator kan alle instellingen wijzigen en resultaten beheren.
-                  </p>
-                </div>
-
-                <div>
-                  <label htmlFor="new-creator" className="block text-sm font-medium text-gray-700 mb-2">
-                    Selecteer nieuwe creator
-                  </label>
-                  <select
-                    id="new-creator"
-                    value={newCreatorId}
-                    onChange={(e) => setNewCreatorId(e.target.value)}
-                    className="input-field w-full"
-                  >
-                    <option value="">Kies een deelnemer...</option>
-                    {matchNight?.participants?.map((participant) => (
-                      <option key={participant.id} value={participant.id}>
-                        {participant.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {newCreatorId && (
-                  <div className="p-3 bg-green-50 rounded">
-                    <p className="text-sm text-green-900">
-                      Je draagt de creator rechten over aan: <strong>
-                        {matchNight?.participants?.find(p => p.id === parseInt(newCreatorId))?.name}
-                      </strong>
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowTransferCreatorModal(false)}
-                  className="btn-secondary"
-                >
-                  Annuleren
-                </button>
-                <button
-                  onClick={handleTransferCreator}
-                  disabled={transferringCreator || !newCreatorId}
-                  className="btn-primary"
-                >
-                  {transferringCreator ? 'Overdragen...' : 'Overdragen'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

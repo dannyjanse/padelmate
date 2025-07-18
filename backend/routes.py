@@ -437,6 +437,9 @@ def join_match_night(match_night_id):
 @login_required
 def leave_match_night(match_night_id):
     """Leave a match night"""
+    data = request.get_json() or {}
+    new_creator_id = data.get('new_creator_id')
+    
     participation = Participation.query.filter_by(
         user_id=current_user.id,
         match_night_id=match_night_id
@@ -445,10 +448,45 @@ def leave_match_night(match_night_id):
     if not participation:
         return jsonify({'error': 'Not participating in this match night'}), 400
     
+    # Get match night
+    match_night = MatchNight.query.get_or_404(match_night_id)
+    
+    # Check if current user is the creator
+    is_creator = match_night.creator_id == current_user.id
+    
+    # If creator is leaving, new_creator_id is required
+    if is_creator and not new_creator_id:
+        return jsonify({'error': 'Creator must transfer rights before leaving'}), 400
+    
+    # If new_creator_id is provided, validate it
+    if new_creator_id:
+        # Check if new creator exists
+        new_creator = User.query.get(new_creator_id)
+        if not new_creator:
+            return jsonify({'error': 'New creator not found'}), 404
+        
+        # Check if new creator is a participant
+        new_creator_participation = Participation.query.filter_by(
+            match_night_id=match_night_id,
+            user_id=new_creator_id
+        ).first()
+        
+        if not new_creator_participation:
+            return jsonify({'error': 'New creator must be a participant'}), 400
+        
+        # Transfer creator rights
+        match_night.creator_id = new_creator_id
+    
     try:
         db.session.delete(participation)
         db.session.commit()
-        return jsonify({'message': 'Successfully left match night'}), 200
+        
+        if is_creator:
+            return jsonify({
+                'message': f'Successfully left match night and transferred creator rights to {new_creator.name}'
+            }), 200
+        else:
+            return jsonify({'message': 'Successfully left match night'}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to leave match night'}), 500

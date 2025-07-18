@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { matchNightsAPI, authAPI } from '../services/api';
-import type { MatchNight } from '../types';
-import { Plus, Calendar, MapPin, Users, Play, Database, Trophy, CheckCircle, Wrench, Trash2 } from 'lucide-react';
+import type { MatchNight, User } from '../types';
+import { Plus, Calendar, MapPin, Users, Play, Database, Trophy, CheckCircle, Wrench, Trash2, X, UserPlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
 
@@ -15,10 +15,16 @@ const Dashboard = () => {
   const [error, setError] = useState<string>('');
   const [fixingSchema, setFixingSchema] = useState(false);
   const [deletingMatchNight, setDeletingMatchNight] = useState<number | null>(null);
+  const [leavingMatchNight, setLeavingMatchNight] = useState<number | null>(null);
+  const [showTransferCreatorModal, setShowTransferCreatorModal] = useState(false);
+  const [selectedMatchNight, setSelectedMatchNight] = useState<MatchNight | null>(null);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [newCreatorId, setNewCreatorId] = useState<string>('');
 
 
   useEffect(() => {
     fetchMatchNights();
+    fetchAllUsers();
   }, []);
 
   const fetchMatchNights = async () => {
@@ -31,6 +37,15 @@ const Dashboard = () => {
       console.error('Error fetching match nights:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAllUsers = async () => {
+    try {
+      const response = await authAPI.getAllUsers();
+      setAllUsers(response.data.users);
+    } catch (err: any) {
+      console.error('Error fetching users:', err);
     }
   };
 
@@ -66,6 +81,58 @@ const Dashboard = () => {
       console.error('Error deleting completed match night:', err);
     } finally {
       setDeletingMatchNight(null);
+    }
+  };
+
+  const handleLeaveMatchNight = async (matchNight: MatchNight, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent navigation
+    
+    // Check if user is the creator
+    const isCreator = matchNight.creator_id === user?.id;
+    
+    if (isCreator) {
+      // Show transfer creator modal
+      setSelectedMatchNight(matchNight);
+      setShowTransferCreatorModal(true);
+    } else {
+      // Regular leave
+      if (!confirm('Weet je zeker dat je je wilt afmelden voor deze padelavond?')) {
+        return;
+      }
+      
+      try {
+        setLeavingMatchNight(matchNight.id);
+        setError('');
+        await matchNightsAPI.leave(matchNight.id);
+        await fetchMatchNights(); // Refresh the list
+      } catch (err: any) {
+        setError(err.response?.data?.error || 'Fout bij het afmelden');
+        console.error('Error leaving match night:', err);
+      } finally {
+        setLeavingMatchNight(null);
+      }
+    }
+  };
+
+  const handleTransferCreatorAndLeave = async () => {
+    if (!selectedMatchNight || !newCreatorId) {
+      setError('Selecteer een nieuwe creator');
+      return;
+    }
+    
+    try {
+      setLeavingMatchNight(selectedMatchNight.id);
+      setError('');
+      await matchNightsAPI.leave(selectedMatchNight.id, parseInt(newCreatorId));
+      await fetchMatchNights(); // Refresh the list
+      setShowTransferCreatorModal(false);
+      setSelectedMatchNight(null);
+      setNewCreatorId('');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fout bij het overdragen van creator rechten');
+      console.error('Error transferring creator and leaving:', err);
+    } finally {
+      setLeavingMatchNight(null);
     }
   };
 
@@ -240,17 +307,32 @@ const Dashboard = () => {
                     </div>
                   </div>
                   
-                  {/* Delete button - only for Danny and completed match nights */}
-                  {user?.id === 17 && matchNight.game_status === 'completed' && (
-                    <button
-                      onClick={(e) => handleDeleteCompleted(matchNight.id, e)}
-                      disabled={deletingMatchNight === matchNight.id}
-                      className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
-                      title="Verwijder afgeronde padelavond"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                  {/* Action buttons */}
+                  <div className="flex items-center space-x-1">
+                    {/* Leave button - only for not started match nights */}
+                    {matchNight.game_status === 'not_started' && (
+                      <button
+                        onClick={(e) => handleLeaveMatchNight(matchNight, e)}
+                        disabled={leavingMatchNight === matchNight.id}
+                        className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-md transition-colors"
+                        title={matchNight.creator_id === user?.id ? "Creator overdragen en afmelden" : "Afmelden"}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                    
+                    {/* Delete button - only for Danny and completed match nights */}
+                    {user?.id === 17 && matchNight.game_status === 'completed' && (
+                      <button
+                        onClick={(e) => handleDeleteCompleted(matchNight.id, e)}
+                        disabled={deletingMatchNight === matchNight.id}
+                        className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+                        title="Verwijder afgeronde padelavond"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="flex items-center justify-between text-sm text-gray-500">
@@ -270,6 +352,80 @@ const Dashboard = () => {
           </div>
         )}
       </div>
+
+      {/* Transfer Creator Modal */}
+      {showTransferCreatorModal && selectedMatchNight && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Creator Overdragen
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowTransferCreatorModal(false);
+                    setSelectedMatchNight(null);
+                    setNewCreatorId('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-gray-600 mb-4">
+                  Je bent de creator van deze padelavond. Selecteer een nieuwe creator voordat je je afmeldt.
+                </p>
+                
+                <div className="mb-4">
+                  <label htmlFor="new-creator" className="block text-sm font-medium text-gray-700 mb-2">
+                    Nieuwe Creator
+                  </label>
+                  <select
+                    id="new-creator"
+                    value={newCreatorId}
+                    onChange={(e) => setNewCreatorId(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="">Selecteer een nieuwe creator...</option>
+                    {allUsers
+                      .filter(user => user.id !== selectedMatchNight.creator_id)
+                      .map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowTransferCreatorModal(false);
+                    setSelectedMatchNight(null);
+                    setNewCreatorId('');
+                  }}
+                  className="btn-secondary"
+                >
+                  Annuleren
+                </button>
+                <button
+                  onClick={handleTransferCreatorAndLeave}
+                  disabled={!newCreatorId || leavingMatchNight === selectedMatchNight.id}
+                  className="btn-primary"
+                >
+                  {leavingMatchNight === selectedMatchNight.id ? 'Bezig...' : 'Overdragen en Afmelden'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

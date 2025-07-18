@@ -100,7 +100,8 @@ export const matchNightsAPI = {
   
   join: (id: number) => api.post(`/api/match-nights/${id}/join`),
   
-  leave: (id: number) => api.post(`/api/match-nights/${id}/leave`),
+  leave: (id: number, newCreatorId?: number) => 
+    api.post(`/api/match-nights/${id}/leave`, newCreatorId ? { new_creator_id: newCreatorId } : {}),
   
   generateSchedule: (id: number, scheduleType?: string) =>
     api.post(`/api/match-nights/${id}/generate-schedule`, { schedule_type: scheduleType }),
