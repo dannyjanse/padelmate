@@ -25,8 +25,7 @@ export interface PlayerStats {
   match_night_id: number;
   user_id: number;
   user_name?: string;
-  games_won: number;
-  games_lost: number;
+  total_points: number;
   created_at: string;
   updated_at: string;
 }

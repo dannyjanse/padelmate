@@ -1073,83 +1073,125 @@ def debug_database():
 def fix_database_schema():
     """Fix database schema issues"""
     try:
-        print("Fixing database schema...")
-        
         with db.engine.connect() as connection:
-            # Check if game_schema_id column exists in matches table
-            columns = connection.execute(db.text("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = 'matches' AND table_schema = 'public'
-            """)).fetchall()
-            
-            column_names = [col[0] for col in columns]
-            print(f"Matches table columns: {column_names}")
-            
-            # Add missing columns if they don't exist
-            if 'game_schema_id' not in column_names:
-                print("Adding game_schema_id column to matches table...")
-                try:
-                    connection.execute(db.text("ALTER TABLE matches ADD COLUMN game_schema_id INTEGER"))
-                    connection.execute(db.text("ALTER TABLE matches ADD CONSTRAINT fk_matches_game_schema FOREIGN KEY (game_schema_id) REFERENCES game_schemas(id)"))
-                    print("game_schema_id column added successfully")
-                except Exception as e:
-                    print(f"Failed to add game_schema_id column: {str(e)}")
-            
-            # Check match_nights table columns
-            match_nights_columns = connection.execute(db.text("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = 'match_nights' AND table_schema = 'public'
-            """)).fetchall()
-            
-            match_nights_column_names = [col[0] for col in match_nights_columns]
-            print(f"Match_nights table columns: {match_nights_column_names}")
-            
-            # Add game_status column if it doesn't exist
-            if 'game_status' not in match_nights_column_names:
-                print("Adding game_status column to match_nights table...")
-                try:
-                    connection.execute(db.text("ALTER TABLE match_nights ADD COLUMN game_status VARCHAR(20) DEFAULT 'not_started'"))
-                    print("game_status column added successfully")
-                except Exception as e:
-                    print(f"Failed to add game_status column: {str(e)}")
-            
-            # Check if date column is DateTime type
-            column_types = connection.execute(db.text("""
-                SELECT column_name, data_type 
-                FROM information_schema.columns 
-                WHERE table_name = 'match_nights' AND table_schema = 'public' AND column_name = 'date'
-            """)).fetchall()
-            
-            if column_types and column_types[0][1] == 'date':
-                print("Converting date column to timestamp...")
-                try:
-                    connection.execute(db.text("ALTER TABLE match_nights ALTER COLUMN date TYPE TIMESTAMP USING date::timestamp"))
-                    print("date column converted to timestamp successfully")
-                except Exception as e:
-                    print(f"Failed to convert date column: {str(e)}")
-            
-            # Check if game_schemas table exists
-            tables = connection.execute(db.text("""
+            # Get all table names
+            result = connection.execute(db.text("""
                 SELECT table_name 
                 FROM information_schema.tables 
                 WHERE table_schema = 'public'
-            """)).fetchall()
+            """))
+            table_names = [row[0] for row in result]
             
-            table_names = [table[0] for table in tables]
-            print(f"Available tables: {table_names}")
+            print(f"Found tables: {table_names}")
             
+            # Create users table if it doesn't exist
+            if 'users' not in table_names:
+                print("Creating users table...")
+                try:
+                    connection.execute(db.text("""
+                        CREATE TABLE users (
+                            id SERIAL PRIMARY KEY,
+                            name VARCHAR(100) NOT NULL,
+                            email VARCHAR(120) UNIQUE,
+                            password_hash VARCHAR(255) NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    print("users table created successfully")
+                except Exception as e:
+                    print(f"Failed to create users table: {str(e)}")
+            
+            # Create match_nights table if it doesn't exist
+            if 'match_nights' not in table_names:
+                print("Creating match_nights table...")
+                try:
+                    connection.execute(db.text("""
+                        CREATE TABLE match_nights (
+                            id SERIAL PRIMARY KEY,
+                            date TIMESTAMP NOT NULL,
+                            location VARCHAR(200) NOT NULL,
+                            num_courts INTEGER DEFAULT 1,
+                            creator_id INTEGER NOT NULL REFERENCES users(id),
+                            game_status VARCHAR(20) DEFAULT 'not_started',
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    print("match_nights table created successfully")
+                except Exception as e:
+                    print(f"Failed to create match_nights table: {str(e)}")
+            
+            # Create participations table if it doesn't exist
+            if 'participations' not in table_names:
+                print("Creating participations table...")
+                try:
+                    connection.execute(db.text("""
+                        CREATE TABLE participations (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL REFERENCES users(id),
+                            match_night_id INTEGER NOT NULL REFERENCES match_nights(id),
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT unique_user_match_night UNIQUE (user_id, match_night_id)
+                        )
+                    """))
+                    print("participations table created successfully")
+                except Exception as e:
+                    print(f"Failed to create participations table: {str(e)}")
+            
+            # Create matches table if it doesn't exist
+            if 'matches' not in table_names:
+                print("Creating matches table...")
+                try:
+                    connection.execute(db.text("""
+                        CREATE TABLE matches (
+                            id SERIAL PRIMARY KEY,
+                            match_night_id INTEGER NOT NULL REFERENCES match_nights(id),
+                            game_schema_id INTEGER REFERENCES game_schemas(id),
+                            player1_id INTEGER NOT NULL REFERENCES users(id),
+                            player2_id INTEGER NOT NULL REFERENCES users(id),
+                            player3_id INTEGER NOT NULL REFERENCES users(id),
+                            player4_id INTEGER NOT NULL REFERENCES users(id),
+                            round INTEGER NOT NULL,
+                            court INTEGER NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    print("matches table created successfully")
+                except Exception as e:
+                    print(f"Failed to create matches table: {str(e)}")
+            
+            # Create match_results table if it doesn't exist
+            if 'match_results' not in table_names:
+                print("Creating match_results table...")
+                try:
+                    connection.execute(db.text("""
+                        CREATE TABLE match_results (
+                            id SERIAL PRIMARY KEY,
+                            match_id INTEGER NOT NULL REFERENCES matches(id),
+                            score VARCHAR(50),
+                            winner_ids TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    print("match_results table created successfully")
+                except Exception as e:
+                    print(f"Failed to create match_results table: {str(e)}")
+            
+            # Create game_schemas table if it doesn't exist
             if 'game_schemas' not in table_names:
                 print("Creating game_schemas table...")
-                # Drop and recreate all tables to ensure proper schema
-                connection.execute(db.text("DROP SCHEMA public CASCADE"))
-                connection.execute(db.text("CREATE SCHEMA public"))
-                connection.commit()
-                
-                # Let SQLAlchemy recreate all tables
-                db.create_all()
-                print("All tables recreated successfully")
+                try:
+                    connection.execute(db.text("""
+                        CREATE TABLE game_schemas (
+                            id SERIAL PRIMARY KEY,
+                            match_night_id INTEGER NOT NULL REFERENCES match_nights(id),
+                            game_mode VARCHAR(50) NOT NULL,
+                            status VARCHAR(20) DEFAULT 'pending',
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    print("game_schemas table created successfully")
+                except Exception as e:
+                    print(f"Failed to create game_schemas table: {str(e)}")
             
             # Create player_stats table if it doesn't exist
             if 'player_stats' not in table_names:
@@ -1160,8 +1202,7 @@ def fix_database_schema():
                             id SERIAL PRIMARY KEY,
                             match_night_id INTEGER NOT NULL REFERENCES match_nights(id),
                             user_id INTEGER NOT NULL REFERENCES users(id),
-                            games_won INTEGER DEFAULT 0,
-                            games_lost INTEGER DEFAULT 0,
+                            total_points INTEGER DEFAULT 0,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             CONSTRAINT unique_player_match_night_stats UNIQUE (match_night_id, user_id)
@@ -1170,6 +1211,44 @@ def fix_database_schema():
                     print("player_stats table created successfully")
                 except Exception as e:
                     print(f"Failed to create player_stats table: {str(e)}")
+            else:
+                # Check if we need to migrate from games_won/games_lost to total_points
+                try:
+                    # Check if games_won column exists
+                    result = connection.execute(db.text("""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'player_stats' AND column_name = 'games_won'
+                    """))
+                    has_games_won = result.fetchone() is not None
+                    
+                    if has_games_won:
+                        print("Migrating player_stats from games_won/games_lost to total_points...")
+                        
+                        # Add total_points column if it doesn't exist
+                        connection.execute(db.text("""
+                            ALTER TABLE player_stats 
+                            ADD COLUMN IF NOT EXISTS total_points INTEGER DEFAULT 0
+                        """))
+                        
+                        # Update total_points based on games_won (temporary migration)
+                        # Since we can't calculate total_points from games_won, we'll set it to 0
+                        # and let the system recalculate from match results
+                        connection.execute(db.text("""
+                            UPDATE player_stats 
+                            SET total_points = 0
+                        """))
+                        
+                        # Remove old columns
+                        connection.execute(db.text("""
+                            ALTER TABLE player_stats 
+                            DROP COLUMN IF EXISTS games_won,
+                            DROP COLUMN IF EXISTS games_lost
+                        """))
+                        
+                        print("player_stats migration completed successfully")
+                except Exception as e:
+                    print(f"Failed to migrate player_stats: {str(e)}")
             
             connection.commit()
             print("Database schema fixed successfully!")
@@ -1597,16 +1676,9 @@ def update_player_stats_for_match(match_id):
     except (ValueError, IndexError):
         return
     
-    # Determine winners and losers
-    if team1_games > team2_games:
-        winners = [match.player1_id, match.player2_id]
-        losers = [match.player3_id, match.player4_id]
-    elif team2_games > team1_games:
-        winners = [match.player3_id, match.player4_id]
-        losers = [match.player1_id, match.player2_id]
-    else:
-        # Tie - no games won or lost
-        return
+    # Calculate total points for each team
+    team1_total_points = team1_games
+    team2_total_points = team2_games
     
     # Update stats for all players
     for player_id in [match.player1_id, match.player2_id, match.player3_id, match.player4_id]:
@@ -1620,16 +1692,17 @@ def update_player_stats_for_match(match_id):
             player_stat = PlayerStats(
                 match_night_id=match_night_id,
                 user_id=player_id,
-                games_won=0,
-                games_lost=0
+                total_points=0
             )
             db.session.add(player_stat)
         
-        # Update games won/lost
-        if player_id in winners:
-            player_stat.games_won += 1
+        # Add points based on which team the player was on
+        if player_id in [match.player1_id, match.player2_id]:
+            # Player was on team 1
+            player_stat.total_points += team1_total_points
         else:
-            player_stat.games_lost += 1
+            # Player was on team 2
+            player_stat.total_points += team2_total_points
     
     db.session.commit()
 
@@ -1658,3 +1731,50 @@ def generate_king_of_the_court_matches(match_night, game_schema):
     
     db.session.commit()
     return matches 
+
+def recalculate_all_player_stats(match_night_id):
+    """Recalculate all player stats for a match night from existing match results"""
+    try:
+        # Get all matches with results for this match night
+        matches = Match.query.filter_by(match_night_id=match_night_id).all()
+        
+        # Clear existing player stats for this match night
+        PlayerStats.query.filter_by(match_night_id=match_night_id).delete()
+        
+        # Recalculate stats for each match with a result
+        for match in matches:
+            if match.result:
+                update_player_stats_for_match(match.id)
+        
+        db.session.commit()
+        print(f"Recalculated player stats for match night {match_night_id}")
+        return True
+    except Exception as e:
+        print(f"Failed to recalculate player stats: {str(e)}")
+        db.session.rollback()
+        return False
+
+@auth_bp.route('/recalculate-stats/<int:match_night_id>', methods=['POST'])
+@login_required
+def recalculate_stats(match_night_id):
+    """Recalculate player stats for a match night"""
+    try:
+        # Get match night
+        match_night = MatchNight.query.get_or_404(match_night_id)
+        
+        # Check if user is the creator
+        if match_night.creator_id != current_user.id:
+            return jsonify({'error': 'Only the creator can recalculate stats'}), 403
+        
+        success = recalculate_all_player_stats(match_night_id)
+        
+        if success:
+            return jsonify({
+                'message': 'Player stats recalculated successfully',
+                'status': 'success'
+            }), 200
+        else:
+            return jsonify({'error': 'Failed to recalculate player stats'}), 500
+            
+    except Exception as e:
+        return jsonify({'error': f'Failed to recalculate stats: {str(e)}'}), 500 

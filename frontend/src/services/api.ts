@@ -79,6 +79,9 @@ export const authAPI = {
   debugDatabase: () => api.get('/api/auth/debug-db'),
   
   fixSchema: () => api.post('/api/auth/fix-schema'),
+  
+  recalculateStats: (matchNightId: number) =>
+    api.post(`/api/auth/recalculate-stats/${matchNightId}`),
 };
 
 // Match Nights API

@@ -21,7 +21,8 @@ import {
   Plus,
   X,
   CheckCircle,
-  Award
+  Award,
+  RefreshCw
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
@@ -48,6 +49,8 @@ const MatchNightDetails = () => {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [submittingResult, setSubmittingResult] = useState(false);
   const [completingGame, setCompletingGame] = useState(false);
+  const [recalculatingStats, setRecalculatingStats] = useState(false);
+  const [fixingSchema, setFixingSchema] = useState(false);
   const [resultData, setResultData] = useState({
     team1_games: 0,
     team2_games: 0,
@@ -120,17 +123,55 @@ const MatchNightDetails = () => {
   };
 
   const handleCompleteGame = async () => {
+    if (!matchNight) return;
+    
+    setCompletingGame(true);
     try {
-      setCompletingGame(true);
-      await gameSchemasAPI.completeGame(parseInt(id!));
-      await fetchGameStatus(); // Refresh game status
-      await fetchMatchNight(); // Refresh match night data
-      setError(''); // Clear any previous errors
-      alert('Spel succesvol afgerond! Alle uitslagen staan nu vast.');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Fout bij het afronden van het spel');
+      const response = await gameSchemasAPI.completeGame(parseInt(id!));
+      if (response.status === 200) {
+        // Refresh the page to show completed state
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Failed to complete game:', error);
+      setError('Failed to complete game');
     } finally {
       setCompletingGame(false);
+    }
+  };
+
+  const handleRecalculateStats = async () => {
+    if (!matchNight) return;
+    
+    setRecalculatingStats(true);
+    try {
+      const response = await authAPI.recalculateStats(parseInt(id!));
+      if (response.status === 200) {
+        // Refresh match night data to show updated stats
+        await fetchMatchNight();
+        setError('');
+      }
+    } catch (error) {
+      console.error('Failed to recalculate stats:', error);
+      setError('Failed to recalculate stats');
+    } finally {
+      setRecalculatingStats(false);
+    }
+  };
+
+  const handleFixSchema = async () => {
+    setFixingSchema(true);
+    try {
+      const response = await authAPI.fixSchema();
+      if (response.status === 200) {
+        // Refresh the page to reload data
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Failed to fix schema:', error);
+      setError('Failed to fix database schema');
+    } finally {
+      setFixingSchema(false);
     }
   };
 
@@ -355,11 +396,8 @@ const MatchNightDetails = () => {
     if (!matchNight?.player_stats) return [];
     
     return [...matchNight.player_stats].sort((a, b) => {
-      // Sort by games won (descending), then by games lost (ascending)
-      if (a.games_won !== b.games_won) {
-        return b.games_won - a.games_won;
-      }
-      return a.games_lost - b.games_lost;
+      // Sort by total points (descending)
+      return b.total_points - a.total_points;
     });
   };
 
@@ -401,6 +439,21 @@ const MatchNightDetails = () => {
       <div className="text-center py-12">
         <h3 className="text-lg font-medium text-gray-900">Padelavond niet gevonden</h3>
         <p className="text-gray-500 mt-1">De opgevraagde padelavond bestaat niet.</p>
+        
+        {/* Debug button to fix database schema */}
+        <div className="mt-6">
+          <button
+            onClick={handleFixSchema}
+            disabled={fixingSchema}
+            className="btn-secondary flex items-center justify-center space-x-2 mx-auto"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>{fixingSchema ? 'Database repareren...' : 'Database Schema Repareren'}</span>
+          </button>
+          <p className="text-xs text-gray-400 mt-2">
+            Probeer dit als de padelavond niet wordt gevonden
+          </p>
+        </div>
       </div>
     );
   }
@@ -544,6 +597,18 @@ const MatchNightDetails = () => {
             </button>
           )}
 
+          {/* Recalculate stats button - alleen voor creator als er uitslagen zijn */}
+          {isCreator() && matchNight.matches && matchNight.matches.some(match => match.result) && (
+            <button
+              onClick={handleRecalculateStats}
+              disabled={recalculatingStats}
+              className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>{recalculatingStats ? 'Herberekenen...' : 'Herbereken Stand'}</span>
+            </button>
+          )}
+
           {/* Afmeld knop - alleen voor deelnemers, niet tijdens actief spel */}
           {isParticipating() && !gameStatus?.game_active && (
             <button
@@ -588,15 +653,15 @@ const MatchNightDetails = () => {
                     <div>
                       <p className="font-medium text-gray-900">{stat.user_name}</p>
                       <p className="text-sm text-gray-500">
-                        {stat.games_won} gewonnen • {stat.games_lost} verloren
+                        Totaal punten gescoord
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-primary-600">
-                      {stat.games_won}
+                      {stat.total_points}
                     </p>
-                    <p className="text-xs text-gray-500">gewonnen</p>
+                    <p className="text-xs text-gray-500">punten</p>
                   </div>
                 </div>
               ))}

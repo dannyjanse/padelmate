@@ -191,8 +191,7 @@ class PlayerStats(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     match_night_id = db.Column(db.Integer, db.ForeignKey('match_nights.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    games_won = db.Column(db.Integer, default=0)
-    games_lost = db.Column(db.Integer, default=0)
+    total_points = db.Column(db.Integer, default=0)  # Total points scored across all matches
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -209,8 +208,7 @@ class PlayerStats(db.Model):
             'match_night_id': self.match_night_id,
             'user_id': self.user_id,
             'user_name': self.user.name if self.user else None,
-            'games_won': self.games_won,
-            'games_lost': self.games_lost,
+            'total_points': self.total_points,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         } 
