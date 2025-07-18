@@ -104,6 +104,13 @@ class Match(db.Model):
     # Relationships
     result = db.relationship('MatchResult', backref='match', uselist=False, lazy=True)
     
+    # Indexes for performance
+    __table_args__ = (
+        db.Index('idx_matches_match_night_id', 'match_night_id'),
+        db.Index('idx_matches_round', 'round'),
+        db.Index('idx_matches_players', 'player1_id', 'player2_id', 'player3_id', 'player4_id'),
+    )
+    
     def to_dict(self):
         # Haal de user objecten op voor de namen
         player1 = User.query.get(self.player1_id)
@@ -213,7 +220,11 @@ class PlayerStats(db.Model):
     user = db.relationship('User', backref='player_stats', lazy=True)
     
     # Ensure unique stats per player per match night
-    __table_args__ = (db.UniqueConstraint('match_night_id', 'user_id', name='unique_player_match_night_stats'),)
+    __table_args__ = (
+        db.UniqueConstraint('match_night_id', 'user_id', name='unique_player_match_night_stats'),
+        db.Index('idx_player_stats_match_night_user', 'match_night_id', 'user_id'),
+        db.Index('idx_player_stats_total_points', 'total_points'),
+    )
     
     def to_dict(self):
         return {

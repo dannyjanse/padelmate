@@ -8,6 +8,7 @@ from datetime import datetime
 import json
 import random
 from itertools import combinations
+from functools import lru_cache
 
 # Blueprints
 auth_bp = Blueprint('auth', __name__)
@@ -505,16 +506,10 @@ def generate_schedule(match_night_id):
 @login_required
 def submit_match_result(match_id):
     """Submit result for a match"""
-    print(f"Submitting result for match_id: {match_id}")
     match = Match.query.get_or_404(match_id)
     data = request.get_json()
     
-    print(f"Received data: {data}")
-    print(f"Data type: {type(data)}")
-    print(f"Winner IDs: {data.get('winner_ids') if data else 'No data'}")
-    
     if not data:
-        print("No data provided")
         return jsonify({'error': 'No data provided'}), 400
     
     # Check if result already exists
@@ -532,7 +527,6 @@ def submit_match_result(match_id):
         
         # Set new winner_ids
         existing_result.set_winner_ids(data.get('winner_ids', []))
-        print(f"New winner_ids set: {existing_result.winner_ids}")
         
         try:
             db.session.commit()
@@ -540,10 +534,8 @@ def submit_match_result(match_id):
             # Update player stats after updating result
             update_player_stats_for_match(match_id)
             
-            print(f"Result updated successfully for match_id: {match_id}")
             return jsonify({'message': 'Result updated successfully', 'result': existing_result.to_dict()}), 200
         except Exception as e:
-            print(f"Error updating result: {str(e)}")
             db.session.rollback()
             return jsonify({'error': f'Failed to update result: {str(e)}'}), 500
     
@@ -554,9 +546,7 @@ def submit_match_result(match_id):
     
     # Set winner_ids using the proper method
     winner_ids = data.get('winner_ids', [])
-    print(f"Setting winner_ids: {winner_ids}")
     result.set_winner_ids(winner_ids)
-    print(f"Result winner_ids after setting: {result.winner_ids}")
     
     try:
         db.session.add(result)
@@ -565,10 +555,8 @@ def submit_match_result(match_id):
         # Update player stats after submitting result
         update_player_stats_for_match(match_id)
         
-        print(f"Result submitted successfully for match_id: {match_id}")
         return jsonify({'message': 'Result submitted successfully', 'result': result.to_dict()}), 201
     except Exception as e:
-        print(f"Error submitting result: {str(e)}")
         db.session.rollback()
         return jsonify({'error': f'Failed to submit result: {str(e)}'}), 500
 
@@ -634,12 +622,21 @@ def init_database():
 
 
 
+@lru_cache(maxsize=1)
+def get_all_users_cached():
+    """Cached version of getting all users"""
+    return User.query.all()
+
+def clear_users_cache():
+    """Clear the users cache"""
+    get_all_users_cached.cache_clear()
+
 # Get all users (for adding participants)
 @auth_bp.route('/users', methods=['GET'])
 @login_required
 def get_all_users():
-    """Get all users for adding to match nights"""
-    users = User.query.all()
+    """Get all users for adding participants"""
+    users = get_all_users_cached()
     return jsonify({'users': [user.to_dict() for user in users]}), 200
 
 # Add participant to match night
@@ -737,6 +734,27 @@ def test_endpoint():
             'init_db': '/api/auth/init-db'
         }
     }), 200
+
+# Test users endpoint
+@auth_bp.route('/test-users', methods=['GET'])
+def test_users():
+    """Test endpoint to check if users exist"""
+    try:
+        users = User.query.all()
+        user_count = len(users)
+        
+        return jsonify({
+            'message': f'Found {user_count} users in database',
+            'user_count': user_count,
+            'users': [{'id': user.id, 'name': user.name, 'email': user.email} for user in users],
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'message': 'Error checking users',
+            'error': str(e),
+            'status': 'error'
+        }), 500
 
 # Test database connection
 @auth_bp.route('/test-db', methods=['GET'])
@@ -1015,6 +1033,10 @@ def add_users():
                 db.session.add(user)
                 new_users.append(user_data['email'])
         db.session.commit()
+        
+        # Clear users cache after adding new users
+        clear_users_cache()
+        
         return jsonify({
             'message': f'{len(new_users)} users toegevoegd, {len(existing_users)} bestonden al.',
             'new_users': new_users,
@@ -1795,13 +1817,15 @@ def update_player_stats_for_match(match_id):
         elif not team2_has_played_together:
             naai_partij_players = [match.player3_id, match.player4_id]
     
+    # OPTIMIZED: Get all player stats in one query
+    player_ids = [match.player1_id, match.player2_id, match.player3_id, match.player4_id]
+    existing_stats = PlayerStats.query.filter_by(match_night_id=match_night_id).filter(PlayerStats.user_id.in_(player_ids)).all()
+    existing_stats_dict = {stat.user_id: stat for stat in existing_stats}
+    
     # Update stats for all players
-    for player_id in [match.player1_id, match.player2_id, match.player3_id, match.player4_id]:
+    for player_id in player_ids:
         # Get or create player stats
-        player_stat = PlayerStats.query.filter_by(
-            match_night_id=match_night_id,
-            user_id=player_id
-        ).first()
+        player_stat = existing_stats_dict.get(player_id)
         
         if not player_stat:
             player_stat = PlayerStats(
