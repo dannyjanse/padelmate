@@ -27,7 +27,7 @@ services:
     staticPublishPath: frontend/dist
     envVars:
       - key: VITE_API_URL
-        value: https://padelmate-backend.onrender.com
+        value: https://api.kingofthecourt.onrender.com
     routes:
       - type: rewrite
         source: /*
