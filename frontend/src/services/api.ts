@@ -13,7 +13,7 @@ const API_BASE_URL = 'https://padelmate-backend.onrender.com'; // Production API
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true,
+  withCredentials: false, // Tijdelijk uitgeschakeld voor CORS probleem
   headers: {
     'Content-Type': 'application/json',
   },
