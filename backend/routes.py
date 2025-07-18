@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
-from models import User, MatchNight, Participation, Match, MatchResult
+from models import User, MatchNight, Participation, Match, MatchResult, GameSchema
 from schedule_generator import create_matches_for_night
 from extensions import db
 from datetime import datetime
@@ -11,6 +11,7 @@ import json
 auth_bp = Blueprint('auth', __name__)
 match_nights_bp = Blueprint('match_nights', __name__)
 matches_bp = Blueprint('matches', __name__)
+game_schemas_bp = Blueprint('game_schemas', __name__)
 
 # Authentication routes
 @auth_bp.route('/register', methods=['POST'])

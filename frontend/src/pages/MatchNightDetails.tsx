@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { matchNightsAPI, authAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import type { MatchNight, Match, User } from '../types';
+import type { MatchNight, Match, User, GameMode } from '../types';
 import { 
   ArrowLeft, 
   Calendar, 
@@ -14,7 +14,9 @@ import {
   UserPlus,
   UserMinus,
   Edit,
-  LogOut
+  LogOut,
+  Crown,
+  Target
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
@@ -31,6 +33,24 @@ const MatchNightDetails = () => {
   const [joining, setJoining] = useState(false);
   const [generatingSchedule, setGeneratingSchedule] = useState(false);
   const [addingParticipant, setAddingParticipant] = useState(false);
+  const [showGameModal, setShowGameModal] = useState(false);
+  const [startingGame, setStartingGame] = useState(false);
+
+  // Game modes
+  const gameModes: GameMode[] = [
+    {
+      id: 'everyone_vs_everyone',
+      name: 'Iedereen tegen iedereen',
+      description: 'Alle spelers spelen tegen elkaar in verschillende combinaties',
+      icon: 'Target'
+    },
+    {
+      id: 'king_of_the_court',
+      name: 'King of the Court',
+      description: 'Winnaars blijven op de baan, verliezers gaan naar de wachtrij',
+      icon: 'Crown'
+    }
+  ];
 
   useEffect(() => {
     if (id) {
@@ -110,6 +130,21 @@ const MatchNightDetails = () => {
       setError(err.response?.data?.error || 'Fout bij het genereren van schema');
     } finally {
       setGeneratingSchedule(false);
+    }
+  };
+
+  const handleStartGame = async (gameMode: string) => {
+    try {
+      setStartingGame(true);
+      // TODO: Implement API call to start game with selected mode
+      console.log('Starting game with mode:', gameMode);
+      setShowGameModal(false);
+      // await matchNightsAPI.startGame(parseInt(id!), gameMode);
+      // await fetchMatchNight(); // Refresh data
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fout bij het starten van spel');
+    } finally {
+      setStartingGame(false);
     }
   };
 
@@ -237,6 +272,18 @@ const MatchNightDetails = () => {
 
       {/* Actions */}
       <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+        {/* Start Padelavond knop - alleen voor creator */}
+        {isCreator() && matchNight.participants_count >= 4 && (
+          <button
+            onClick={() => setShowGameModal(true)}
+            disabled={startingGame}
+            className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
+          >
+            <Play className="w-4 h-4" />
+            <span>{startingGame ? 'Starten...' : 'Start Padelavond'}</span>
+          </button>
+        )}
+
         {/* Afmeld knop - alleen voor deelnemers */}
         {isParticipating() && (
           <button
@@ -378,6 +425,61 @@ const MatchNightDetails = () => {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Game Modal */}
+      {showGameModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Kies Speltype</h2>
+                <button
+                  onClick={() => setShowGameModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {gameModes.map((mode) => (
+                  <button
+                    key={mode.id}
+                    onClick={() => handleStartGame(mode.id)}
+                    disabled={startingGame}
+                    className="w-full p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors text-left"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                        {mode.icon === 'Target' ? (
+                          <Target className="w-5 h-5 text-primary-600" />
+                        ) : (
+                          <Crown className="w-5 h-5 text-primary-600" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-900">{mode.name}</h3>
+                        <p className="text-sm text-gray-500 mt-1">{mode.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowGameModal(false)}
+                  className="btn-secondary"
+                >
+                  Annuleren
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

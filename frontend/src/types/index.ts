@@ -71,4 +71,20 @@ export interface RegisterData {
   name: string;
   email?: string;
   password: string;
+}
+
+export interface GameMode {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+}
+
+export interface GameSchema {
+  id: number;
+  match_night_id: number;
+  game_mode: string;
+  status: 'pending' | 'active' | 'completed';
+  created_at: string;
+  matches?: Match[];
 } 

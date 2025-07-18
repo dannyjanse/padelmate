@@ -89,6 +89,7 @@ class Match(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     match_night_id = db.Column(db.Integer, db.ForeignKey('match_nights.id'), nullable=False)
+    game_schema_id = db.Column(db.Integer, db.ForeignKey('game_schemas.id'), nullable=True)
     player1_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     player2_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     player3_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -140,4 +141,27 @@ class MatchResult(db.Model):
             'score': self.score,
             'winner_ids': self.get_winner_ids(),
             'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+class GameSchema(db.Model):
+    __tablename__ = 'game_schemas'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    match_night_id = db.Column(db.Integer, db.ForeignKey('match_nights.id'), nullable=False)
+    game_mode = db.Column(db.String(50), nullable=False)  # 'everyone_vs_everyone' or 'king_of_the_court'
+    status = db.Column(db.String(20), default='pending')  # 'pending', 'active', 'completed'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    match_night = db.relationship('MatchNight', backref='game_schemas', lazy=True)
+    matches = db.relationship('Match', backref='game_schema', lazy=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'match_night_id': self.match_night_id,
+            'game_mode': self.game_mode,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'matches': [match.to_dict() for match in self.matches] if self.matches else []
         } 
