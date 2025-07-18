@@ -241,14 +241,7 @@ const MatchNightDetails = () => {
     }
   };
 
-  const handleLeave = async () => {
-    try {
-      await matchNightsAPI.leave(parseInt(id!));
-      await fetchMatchNight(); // Refresh data
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Fout bij het verlaten');
-    }
-  };
+
 
   const handleAddParticipant = async () => {
     if (!selectedUserId) {
