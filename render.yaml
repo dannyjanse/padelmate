@@ -1,9 +1,10 @@
 services:
+  # Force redeploy - Backend service
   - type: web
     name: padelmate-backend
     env: python
     plan: free
-    buildCommand: cd backend && pip install -r requirements.txt
+    buildCommand: cd backend && pip install -r requirements.txt && echo "Backend build completed"
     startCommand: cd backend && gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: PYTHON_VERSION
