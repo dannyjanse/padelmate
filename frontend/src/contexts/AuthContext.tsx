@@ -39,8 +39,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const userData = JSON.parse(storedUser);
         setUser(userData);
         
-        // Gebruik alleen localStorage, skip server check voor nu
-        setUser(userData);
+        // Check server session
+        try {
+          await authAPI.getCurrentUser();
+        } catch (error) {
+          console.log('Server session expired, clearing local storage');
+          localStorage.removeItem('user');
+          setUser(null);
+        }
       }
     } catch (error) {
       console.log('Not authenticated');

@@ -13,26 +13,11 @@ const API_BASE_URL = 'https://padelmate-backend.onrender.com'; // Production API
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: false, // Tijdelijk uitgeschakeld voor CORS probleem
+  withCredentials: true, // Herstel cookies voor Flask-Login
   headers: {
     'Content-Type': 'application/json',
   },
 });
-
-// Request interceptor om authentication header toe te voegen
-api.interceptors.request.use(
-  (config) => {
-    const user = localStorage.getItem('user');
-    if (user) {
-      const userData = JSON.parse(user);
-      config.headers['Authorization'] = `Bearer ${userData.id}`; // Of een andere auth token
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
 
 // Request interceptor
 api.interceptors.request.use(
@@ -44,21 +29,21 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor - tijdelijk uitgeschakeld
-// api.interceptors.response.use(
-//   (response) => response,
-//   (error) => {
-//     // Alleen redirecten als het geen auth check is en geen login call
-//     if (error.response?.status === 401 && 
-//         !error.config.url?.includes('/api/auth/me') &&
-//         !error.config.url?.includes('/api/auth/quick-login') &&
-//         !error.config.url?.includes('/api/auth/login')) {
-//       localStorage.removeItem('user');
-//       window.location.href = '/login';
-//     }
-//     return Promise.reject(error);
-//   }
-// );
+// Response interceptor
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Alleen redirecten als het geen auth check is en geen login call
+    if (error.response?.status === 401 && 
+        !error.config.url?.includes('/api/auth/me') &&
+        !error.config.url?.includes('/api/auth/quick-login') &&
+        !error.config.url?.includes('/api/auth/login')) {
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Auth API
 export const authAPI = {
