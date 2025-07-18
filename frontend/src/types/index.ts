@@ -58,6 +58,7 @@ export interface MatchResult {
 
 export interface CreateMatchNightData {
   date: string;
+  time?: string;
   location: string;
   num_courts?: number;
 }

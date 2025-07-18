@@ -41,7 +41,7 @@ class MatchNight(db.Model):
     __tablename__ = 'match_nights'
     
     id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.Date, nullable=False)
+    date = db.Column(db.DateTime, nullable=False)  # Changed from Date to DateTime to include time
     location = db.Column(db.String(200), nullable=False)
     num_courts = db.Column(db.Integer, default=1)
     creator_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)

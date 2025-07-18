@@ -199,10 +199,18 @@ def create_match_night():
         return jsonify({'error': 'Missing required fields'}), 400
     
     try:
-        date = datetime.strptime(data['date'], '%Y-%m-%d').date()
-        print(f"Parsed date: {date}")
+        # Parse date and time together
+        if 'time' in data and data['time']:
+            # If time is provided, combine with date
+            date_time_str = f"{data['date']}T{data['time']}"
+            date = datetime.strptime(date_time_str, '%Y-%m-%dT%H:%M')
+        else:
+            # If no time provided, use default time (e.g., 19:00)
+            date_time_str = f"{data['date']}T19:00"
+            date = datetime.strptime(date_time_str, '%Y-%m-%dT%H:%M')
+        print(f"Parsed date and time: {date}")
     except ValueError:
-        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+        return jsonify({'error': 'Invalid date/time format. Use YYYY-MM-DD and HH:MM'}), 400
     
     # Check if creator_id column exists
     with db.engine.connect() as connection:
@@ -256,7 +264,15 @@ def update_match_night(match_night_id):
     
     try:
         if 'date' in data:
-            date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+            # Parse date and time together
+            if 'time' in data and data['time']:
+                # If time is provided, combine with date
+                date_time_str = f"{data['date']}T{data['time']}"
+                date = datetime.strptime(date_time_str, '%Y-%m-%dT%H:%M')
+            else:
+                # If no time provided, use default time (e.g., 19:00)
+                date_time_str = f"{data['date']}T19:00"
+                date = datetime.strptime(date_time_str, '%Y-%m-%dT%H:%M')
             match_night.date = date
         
         if 'location' in data:

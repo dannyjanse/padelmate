@@ -311,6 +311,17 @@ const MatchNightDetails = () => {
     }
   };
 
+  const formatDateTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      const dateFormatted = format(date, 'EEEE d MMMM yyyy', { locale: nl });
+      const timeFormatted = format(date, 'HH:mm', { locale: nl });
+      return `${dateFormatted} om ${timeFormatted}`;
+    } catch {
+      return dateString;
+    }
+  };
+
   const isParticipating = () => {
     if (!matchNight?.participants || !currentUser) return false;
     return matchNight.participants.some(p => p.id === currentUser.id);
@@ -363,7 +374,7 @@ const MatchNightDetails = () => {
           </button>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              {formatDate(matchNight.date)}
+              {formatDateTime(matchNight.date)}
             </h1>
             <div className="flex items-center text-gray-600 mt-1">
               <MapPin className="w-4 h-4 mr-1" />
@@ -414,8 +425,8 @@ const MatchNightDetails = () => {
           <div className="flex items-center">
             <Calendar className="w-5 h-5 text-primary-600 mr-3" />
             <div>
-              <p className="text-sm font-medium text-gray-900">Datum</p>
-              <p className="text-sm text-gray-500">{formatDate(matchNight.date)}</p>
+              <p className="text-sm font-medium text-gray-900">Datum & Tijd</p>
+              <p className="text-sm text-gray-500">{formatDateTime(matchNight.date)}</p>
             </div>
           </div>
         </div>

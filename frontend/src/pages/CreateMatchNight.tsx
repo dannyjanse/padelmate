@@ -8,6 +8,7 @@ const CreateMatchNight = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState<CreateMatchNightData>({
     date: '',
+    time: '19:00',  // Default time
     location: '',
     num_courts: 1,
   });
@@ -75,6 +76,21 @@ const CreateMatchNight = () => {
               value={formData.date}
               onChange={handleChange}
               min={new Date().toISOString().split('T')[0]}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
+              <Calendar className="w-4 h-4 inline mr-2" />
+              Tijdstip
+            </label>
+            <input
+              id="time"
+              name="time"
+              type="time"
+              className="input-field"
+              value={formData.time}
+              onChange={handleChange}
             />
           </div>
 

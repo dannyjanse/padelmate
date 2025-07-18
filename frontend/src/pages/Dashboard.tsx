@@ -43,6 +43,17 @@ const Dashboard = () => {
     }
   };
 
+  const formatDateTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      const dateFormatted = format(date, 'EEEE d MMMM yyyy', { locale: nl });
+      const timeFormatted = format(date, 'HH:mm', { locale: nl });
+      return `${dateFormatted} om ${timeFormatted}`;
+    } catch {
+      return dateString;
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-64">
@@ -109,7 +120,7 @@ const Dashboard = () => {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                      {formatDate(matchNight.date)}
+                      {formatDateTime(matchNight.date)}
                     </h3>
                     <div className="flex items-center text-gray-600 mb-2">
                       <MapPin className="w-4 h-4 mr-1" />
