@@ -114,7 +114,7 @@ const Dashboard = () => {
         
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
           <button
-            onClick={() => navigate('/match-nights/create')}
+            onClick={() => navigate('/match-nights/new')}
             className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
           >
             <Plus className="w-4 h-4" />
@@ -154,7 +154,7 @@ const Dashboard = () => {
             <h3 className="text-lg font-medium text-gray-900 mb-2">Geen padelavonden</h3>
             <p className="text-gray-500 mb-4">Maak je eerste padelavond aan om te beginnen</p>
             <button
-              onClick={() => navigate('/match-nights/create')}
+              onClick={() => navigate('/match-nights/new')}
               className="btn-primary"
             >
               Eerste Padelavond Aanmaken

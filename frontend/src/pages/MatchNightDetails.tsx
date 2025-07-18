@@ -3,26 +3,26 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { matchNightsAPI, authAPI, gameSchemasAPI, matchesAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { MatchNight, Match, User, GameMode } from '../types';
-import { 
-  ArrowLeft, 
-  Calendar, 
-  MapPin, 
+import {
+  ArrowLeft,
+  MapPin,
   Users,
+  Calendar,
   Play,
-  Trophy,
-  Clock,
-  UserPlus,
-  UserMinus,
   Edit,
-  LogOut,
-  Crown,
-  Target,
-  Database,
   Plus,
   X,
   CheckCircle,
   Award,
-  RefreshCw
+  RefreshCw,
+  Clock,
+  Trophy,
+  UserPlus,
+  UserMinus,
+  LogOut,
+  Crown,
+  Target,
+  Database
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
@@ -481,47 +481,46 @@ const MatchNightDetails = () => {
           </div>
         </div>
         
-        {/* Alleen creator kan bewerken - niet voor afgeronde spellen */}
-        {isCreator() && !isGameCompleted() && (
-          <button
-            onClick={() => navigate(`/match-nights/${id}/edit`)}
-            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
-          >
-            <Edit className="w-4 h-4" />
-            <span>Bewerken</span>
-          </button>
-        )}
-        
-        {/* Toon afgerond badge voor afgeronde spellen */}
-        {isGameCompleted() && (
-          <div className="flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-2 rounded-lg">
-            <Trophy className="w-4 h-4" />
-            <span className="font-medium">Spel Afgerond</span>
+        <div className="flex items-center space-x-4">
+          {/* Status Badge */}
+          <div className="flex items-center space-x-2">
+            {isGameCompleted() ? (
+              <div className="flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-2 rounded-lg">
+                <Trophy className="w-4 h-4" />
+                <span className="font-medium">Spel Afgerond</span>
+              </div>
+            ) : gameStatus?.game_active ? (
+              <div className="flex items-center space-x-2 bg-blue-100 text-blue-800 px-3 py-2 rounded-lg">
+                <Play className="w-4 h-4" />
+                <span className="font-medium">
+                  Actief Spel {gameStatus.game_schema.game_mode === 'everyone_vs_everyone' ? 'Iedereen vs Iedereen' : 'King of the Court'}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2 bg-gray-100 text-gray-800 px-3 py-2 rounded-lg">
+                <Clock className="w-4 h-4" />
+                <span className="font-medium">Niet Gestart</span>
+              </div>
+            )}
           </div>
-        )}
+          
+          {/* Alleen creator kan bewerken - niet voor afgeronde spellen */}
+          {isCreator() && !isGameCompleted() && (
+            <button
+              onClick={() => navigate(`/match-nights/${id}/edit`)}
+              className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
+            >
+              <Edit className="w-4 h-4" />
+              <span>Bewerken</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Error message */}
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md">
           {error}
-        </div>
-      )}
-
-      {/* Game Status - bovenaan voor directe zichtbaarheid */}
-      {gameStatus && gameStatus.game_active && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <Play className="w-5 h-5 text-green-600" />
-            <span className="font-medium text-green-800">
-              {gameStatus.game_schema.game_mode === 'everyone_vs_everyone' 
-                ? 'Iedereen tegen iedereen' 
-                : 'King of the Court'}
-            </span>
-          </div>
-          <p className="text-sm text-green-700">
-            Spel gestart op: {new Date(gameStatus.game_schema.created_at).toLocaleString('nl-NL')}
-          </p>
         </div>
       )}
 
