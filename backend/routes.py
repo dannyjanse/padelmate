@@ -447,6 +447,8 @@ def init_database():
         db.session.rollback()
         return jsonify({'error': f'Database initialization failed: {str(e)}'}), 500
 
+
+
 # Get all users (for adding participants)
 @auth_bp.route('/users', methods=['GET'])
 @login_required
@@ -648,12 +650,28 @@ def check_database():
     """Check if database is working and has users"""
     try:
         user_count = User.query.count()
+        
+        # Get all users for debugging
+        users = User.query.all()
+        user_list = []
+        for user in users:
+            user_list.append({
+                'id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'created_at': user.created_at.isoformat() if user.created_at else None
+            })
+        
         return jsonify({
             'message': 'Database is working',
             'user_count': user_count,
+            'users': user_list,
             'status': 'success'
         }), 200
     except Exception as e:
+        import traceback
+        print(f"Database check error: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             'message': 'Database error',
             'error': str(e),
@@ -788,3 +806,38 @@ def fix_match_nights_table():
             'error': str(e),
             'status': 'error'
         }), 500 
+
+# Add specific users endpoint
+@auth_bp.route('/add-users', methods=['POST'])
+def add_users():
+    """Add the 5 specific users (excl. Danny) als ze nog niet bestaan."""
+    try:
+        users_to_create = [
+            {'name': 'Branko', 'email': 'branko@hotmail.com', 'password': 'Branko123'},
+            {'name': 'Tukkie', 'email': 'tukkie@hotmail.com', 'password': 'Tukkie123'},
+            {'name': 'Michiel', 'email': 'michiel@hotmail.com', 'password': 'Michiel123'},
+            {'name': 'Jeroen', 'email': 'jeroen@hotmail.com', 'password': 'Jeroen123'},
+            {'name': 'Joost', 'email': 'joost@hotmail.com', 'password': 'Joost123'}
+        ]
+        new_users = []
+        existing_users = []
+        for user_data in users_to_create:
+            if User.query.filter_by(email=user_data['email']).first():
+                existing_users.append(user_data['email'])
+            else:
+                user = User(name=user_data['name'], email=user_data['email'])
+                user.set_password(user_data['password'])
+                db.session.add(user)
+                new_users.append(user_data['email'])
+        db.session.commit()
+        return jsonify({
+            'message': f'{len(new_users)} users toegevoegd, {len(existing_users)} bestonden al.',
+            'new_users': new_users,
+            'existing_users': existing_users
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        print(f"Failed to add users: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': f'Failed to add users: {str(e)}'}), 500 

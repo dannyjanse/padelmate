@@ -68,6 +68,8 @@ export const authAPI = {
   checkDatabase: () => api.get('/api/auth/check-db'),
   
   getAllUsers: () => api.get<{ users: User[] }>('/api/auth/users'),
+  
+  addUsers: () => api.post('/api/auth/add-users'),
 };
 
 // Match Nights API

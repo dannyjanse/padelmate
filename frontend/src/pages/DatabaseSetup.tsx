@@ -73,7 +73,12 @@ const DatabaseSetup = () => {
       setMessage('');
       
       const response = await authAPI.checkDatabase();
-      setMessage(`${response.data.message} - Users: ${response.data.user_count}`);
+      const users = response.data.users || [];
+      const userList = users.map((user: any) => 
+        `${user.name} (${user.email})`
+      ).join('\n');
+      
+      setMessage(`${response.data.message} - Users: ${response.data.user_count}\n\nUser list:\n${userList}`);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to check database');
     } finally {
@@ -91,6 +96,20 @@ const DatabaseSetup = () => {
       setMessage(response.data.message);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to initialize database');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addUsers = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      setMessage('');
+      const response = await authAPI.addUsers();
+      setMessage(response.data.message + '\nNieuwe users: ' + response.data.new_users.join(', ') + '\nBestaande users: ' + response.data.existing_users.join(', '));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to add users');
     } finally {
       setLoading(false);
     }
@@ -151,6 +170,14 @@ const DatabaseSetup = () => {
               className="btn-secondary w-full"
             >
               {loading ? 'Initializing...' : 'Initialize Database with Test Data'}
+            </button>
+
+            <button
+              onClick={addUsers}
+              disabled={loading}
+              className="btn-secondary w-full"
+            >
+              {loading ? 'Toevoegen...' : 'Voeg 5 vaste users toe'}
             </button>
           </div>
         </div>
