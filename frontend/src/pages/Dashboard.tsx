@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { matchNightsAPI, authAPI } from '../services/api';
 import type { MatchNight } from '../types';
-import { Plus, Calendar, MapPin, Users, Play, Database, Trophy, CheckCircle, Wrench } from 'lucide-react';
+import { Plus, Calendar, MapPin, Users, Play, Database, Trophy, CheckCircle, Wrench, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
 
@@ -14,6 +14,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [fixingSchema, setFixingSchema] = useState(false);
+  const [deletingMatchNight, setDeletingMatchNight] = useState<number | null>(null);
 
 
   useEffect(() => {
@@ -38,7 +39,6 @@ const Dashboard = () => {
       setFixingSchema(true);
       setError('');
       const response = await authAPI.fixSchema();
-      console.log('Schema fix response:', response.data);
       alert('Database schema succesvol bijgewerkt! Probeer de pagina te verversen.');
       await fetchMatchNights(); // Refresh data
     } catch (err: any) {
@@ -49,6 +49,25 @@ const Dashboard = () => {
     }
   };
 
+  const handleDeleteCompleted = async (matchNightId: number, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent navigation
+    
+    if (!confirm('Weet je zeker dat je deze afgeronde padelavond wilt verwijderen? Dit kan niet ongedaan worden gemaakt.')) {
+      return;
+    }
+    
+    try {
+      setDeletingMatchNight(matchNightId);
+      setError('');
+      await matchNightsAPI.deleteCompleted(matchNightId);
+      await fetchMatchNights(); // Refresh the list
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fout bij het verwijderen van padelavond');
+      console.error('Error deleting completed match night:', err);
+    } finally {
+      setDeletingMatchNight(null);
+    }
+  };
 
 
   const formatDate = (dateString: string) => {
@@ -76,7 +95,7 @@ const Dashboard = () => {
       case 'active':
         return <Play className="w-4 h-4 text-green-600" />;
       case 'completed':
-        return <Trophy className="w-4 h-4 text-yellow-600" />;
+        return <Trophy className="w-4 h-4 text-blue-600" />;
       default:
         return <Calendar className="w-4 h-4 text-gray-400" />;
     }
@@ -85,12 +104,50 @@ const Dashboard = () => {
   const getGameStatusText = (gameStatus: string) => {
     switch (gameStatus) {
       case 'active':
-        return 'Spel actief';
+        return <span className="text-green-600">Spel actief</span>;
       case 'completed':
-        return 'Spel afgerond';
+        return <span className="text-blue-600">Spel afgerond</span>;
       default:
-        return 'Nog niet gestart';
+        return <span className="text-gray-500">Nog niet gestart</span>;
     }
+  };
+
+  const getSortedMatchNights = () => {
+    return [...matchNights].sort((a, b) => {
+      // Priority order: active > not_started > completed
+      const getStatusPriority = (status: string) => {
+        switch (status) {
+          case 'active':
+            return 1;
+          case 'not_started':
+            return 2;
+          case 'completed':
+            return 3;
+          default:
+            return 4;
+        }
+      };
+
+      const aPriority = getStatusPriority(a.game_status);
+      const bPriority = getStatusPriority(b.game_status);
+
+      // If different status, sort by priority
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+
+      // If same status, sort by date (newest first for active, oldest first for others)
+      const aDate = new Date(a.date).getTime();
+      const bDate = new Date(b.date).getTime();
+      
+      if (a.game_status === 'active') {
+        // For active games, newest first
+        return bDate - aDate;
+      } else {
+        // For other statuses, oldest first
+        return aDate - bDate;
+      }
+    });
   };
 
   if (loading) {
@@ -162,7 +219,7 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {matchNights.map((matchNight) => (
+            {getSortedMatchNights().map((matchNight) => (
               <div
                 key={matchNight.id}
                 className="card hover:shadow-lg transition-shadow cursor-pointer"
@@ -179,9 +236,21 @@ const Dashboard = () => {
                     </div>
                     <div className="flex items-center text-sm text-gray-500">
                       {getGameStatusIcon(matchNight.game_status)}
-                      <span className="ml-1">{getGameStatusText(matchNight.game_status)}</span>
+                      {getGameStatusText(matchNight.game_status)}
                     </div>
                   </div>
+                  
+                  {/* Delete button - only for Danny and completed match nights */}
+                  {user?.id === 17 && matchNight.game_status === 'completed' && (
+                    <button
+                      onClick={(e) => handleDeleteCompleted(matchNight.id, e)}
+                      disabled={deletingMatchNight === matchNight.id}
+                      className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+                      title="Verwijder afgeronde padelavond"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
                 
                 <div className="flex items-center justify-between text-sm text-gray-500">

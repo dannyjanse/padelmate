@@ -42,6 +42,7 @@ const MatchNightDetails = () => {
   const [showGameModal, setShowGameModal] = useState(false);
   const [startingGame, setStartingGame] = useState(false);
   const [gameStatus, setGameStatus] = useState<any>(null);
+  const [loadingGameStatus, setLoadingGameStatus] = useState(true);
   const [debugMatches, setDebugMatches] = useState<any>(null);
   const [stoppingGame, setStoppingGame] = useState(false);
   const [clearingMatches, setClearingMatches] = useState(false);
@@ -51,6 +52,9 @@ const MatchNightDetails = () => {
   const [completingGame, setCompletingGame] = useState(false);
   const [recalculatingStats, setRecalculatingStats] = useState(false);
   const [fixingSchema, setFixingSchema] = useState(false);
+  const [showTransferCreatorModal, setShowTransferCreatorModal] = useState(false);
+  const [transferringCreator, setTransferringCreator] = useState(false);
+  const [newCreatorId, setNewCreatorId] = useState<string>('');
   const [resultData, setResultData] = useState({
     team1_games: 0,
     team2_games: 0,
@@ -75,18 +79,28 @@ const MatchNightDetails = () => {
 
   useEffect(() => {
     if (id) {
+      setLoadingGameStatus(true);
       fetchMatchNight();
       fetchAllUsers();
-      fetchGameStatus();
     }
   }, [id]);
 
+  // Load game status after match night data is loaded
+  useEffect(() => {
+    if (matchNight && !loading) {
+      fetchGameStatus();
+    }
+  }, [matchNight, loading]);
+
   const fetchGameStatus = async () => {
     try {
+      setLoadingGameStatus(true);
       const response = await gameSchemasAPI.getGameStatus(parseInt(id!));
       setGameStatus(response.data);
     } catch (err: any) {
       console.error('Error fetching game status:', err);
+    } finally {
+      setLoadingGameStatus(false);
     }
   };
 
@@ -175,6 +189,24 @@ const MatchNightDetails = () => {
     }
   };
 
+  const handleTransferCreator = async () => {
+    if (!matchNight || !newCreatorId) return;
+    
+    setTransferringCreator(true);
+    try {
+      const response = await matchNightsAPI.transferCreator(parseInt(id!), parseInt(newCreatorId));
+      if (response.status === 200) {
+        // Refresh the page to show updated creator
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Failed to transfer creator:', error);
+      setError('Failed to transfer creator rights');
+    } finally {
+      setTransferringCreator(false);
+    }
+  };
+
   const handleAddResult = (match: Match) => {
     setSelectedMatch(match);
     
@@ -211,33 +243,26 @@ const MatchNightDetails = () => {
 
     const score = `${resultData.team1_games}-${resultData.team2_games}`;
 
-    console.log('Submitting result:', {
-      match_id: selectedMatch.id,
-      score,
-      winner_ids,
-      team1_games: resultData.team1_games,
-      team2_games: resultData.team2_games
-    });
-
     try {
       setSubmittingResult(true);
-      const response = await matchesAPI.submitResult(selectedMatch.id, { 
-        score, 
-        winner_ids 
+      const response = await matchesAPI.submitResult(selectedMatch.id, {
+        score: score,
+        winner_ids: winner_ids
       });
-      console.log('Result submitted successfully:', response.data);
-      setShowResultModal(false);
-      setSelectedMatch(null);
-      setResultData({ team1_games: 0, team2_games: 0, winner_ids: [] });
-      await fetchMatchNight(); // Refresh data
-      setError('');
-    } catch (err: any) {
-      console.error('Error submitting result:', err);
-      console.error('Error response:', err.response?.data);
-      setError(err.response?.data?.error || 'Fout bij het invoeren van uitslag');
-    } finally {
-      setSubmittingResult(false);
-    }
+        
+        // Update player stats
+        await authAPI.recalculateStats(parseInt(id!));
+        
+        // Refresh data
+        await fetchMatchNight();
+        setShowResultModal(false);
+        setError('');
+        alert('Uitslag succesvol opgeslagen!');
+      } catch (err: any) {
+        setError(err.response?.data?.error || 'Fout bij het opslaan van uitslag');
+      } finally {
+        setSubmittingResult(false);
+      }
   };
 
   const handleWinnerToggle = (playerId: number) => {
@@ -324,37 +349,19 @@ const MatchNightDetails = () => {
   };
 
   const handleStartGame = async (gameMode: string) => {
+    setStartingGame(true);
+    setShowGameModal(false);
+    
     try {
-      setStartingGame(true);
-      setError(''); // Clear any previous errors
-      
-      console.log('Starting new game with mode:', gameMode);
-      
-      // Als er al een actief spel is, eerst alle resultaten wissen
-      if (gameStatus?.game_active) {
-        console.log('Clearing existing matches and results...');
-        await matchNightsAPI.clearMatches(parseInt(id!));
-        console.log('Existing matches and results cleared');
-        
-        // Reset game status om oude data te voorkomen
-        setGameStatus(null);
-      }
-      
-      // Start nieuw spel
       const response = await gameSchemasAPI.startGame(parseInt(id!), gameMode);
-      console.log('New game start response:', response.data);
-      
-      // Volledig verversen van alle data - eerst game status, dan match night
-      await fetchGameStatus(); // Refresh game status
-      await fetchMatchNight(); // Force refresh match night data
-      setShowGameModal(false);
-      
-      // Show success message with details
-      const modeName = gameMode === 'everyone_vs_everyone' ? 'Iedereen tegen iedereen' : 'King of the Court';
-      alert(`Spel gestart met modus: ${modeName}\nWedstrijden aangemaakt: ${response.data.matches_created}\nDeelnemers: ${response.data.participants_count}`);
-      
+      if (response.status === 201) {
+        // Refresh data
+        await fetchGameStatus();
+        await fetchMatchNight();
+        setError('');
+        alert('Spel succesvol gestart!');
+      }
     } catch (err: any) {
-      console.error('Error starting game:', err);
       setError(err.response?.data?.error || 'Fout bij het starten van spel');
     } finally {
       setStartingGame(false);
@@ -426,7 +433,7 @@ const MatchNightDetails = () => {
     !matchNight?.participants?.some(p => p.id === user.id)
   );
 
-  if (loading) {
+  if (loading || loadingGameStatus) {
     return (
       <div className="flex items-center justify-center min-h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -474,9 +481,19 @@ const MatchNightDetails = () => {
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               {formatDateTime(matchNight.date)}
             </h1>
-            <div className="flex items-center text-gray-600 mt-1">
-              <MapPin className="w-4 h-4 mr-1" />
-              <span className="text-sm sm:text-base">{matchNight.location}</span>
+            <div className="flex items-center space-x-4 text-gray-600 mt-1">
+              <div className="flex items-center">
+                <MapPin className="w-4 h-4 mr-1" />
+                <span className="text-sm sm:text-base">{matchNight.location}</span>
+              </div>
+              <div className="flex items-center">
+                <Users className="w-4 h-4 mr-1" />
+                <span className="text-sm sm:text-base">{matchNight.participants_count} deelnemers</span>
+              </div>
+              <div className="flex items-center">
+                <Play className="w-4 h-4 mr-1" />
+                <span className="text-sm sm:text-base">{matchNight.num_courts} baan{matchNight.num_courts > 1 ? 'en' : ''}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -484,16 +501,21 @@ const MatchNightDetails = () => {
         <div className="flex items-center space-x-4">
           {/* Status Badge */}
           <div className="flex items-center space-x-2">
-            {isGameCompleted() ? (
-              <div className="flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-2 rounded-lg">
+            {loadingGameStatus ? (
+              <div className="flex items-center space-x-2 bg-gray-100 text-gray-800 px-3 py-2 rounded-lg">
+                <Clock className="w-4 h-4" />
+                <span className="font-medium">Laden...</span>
+              </div>
+            ) : isGameCompleted() ? (
+              <div className="flex items-center space-x-2 bg-blue-100 text-blue-800 px-3 py-2 rounded-lg">
                 <Trophy className="w-4 h-4" />
                 <span className="font-medium">Spel Afgerond</span>
               </div>
             ) : gameStatus?.game_active ? (
-              <div className="flex items-center space-x-2 bg-blue-100 text-blue-800 px-3 py-2 rounded-lg">
+              <div className="flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-2 rounded-lg">
                 <Play className="w-4 h-4" />
                 <span className="font-medium">
-                  Actief Spel {gameStatus.game_schema.game_mode === 'everyone_vs_everyone' ? 'Iedereen vs Iedereen' : 'King of the Court'}
+                  Actief Spel '{gameStatus.game_schema.game_mode === 'everyone_vs_everyone' ? 'Iedereen vs Iedereen' : 'King of the Court'}'
                 </span>
               </div>
             ) : (
@@ -524,39 +546,6 @@ const MatchNightDetails = () => {
         </div>
       )}
 
-      {/* Info cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card">
-          <div className="flex items-center">
-            <Calendar className="w-5 h-5 text-primary-600 mr-3" />
-            <div>
-              <p className="text-sm font-medium text-gray-900">Datum & Tijd</p>
-              <p className="text-sm text-gray-500">{formatDateTime(matchNight.date)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center">
-            <Users className="w-5 h-5 text-primary-600 mr-3" />
-            <div>
-              <p className="text-sm font-medium text-gray-900">Deelnemers</p>
-              <p className="text-sm text-gray-500">{matchNight.participants_count}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center">
-            <Play className="w-5 h-5 text-primary-600 mr-3" />
-            <div>
-              <p className="text-sm font-medium text-gray-900">Banen</p>
-              <p className="text-sm text-gray-500">{matchNight.num_courts}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Actions - alleen tonen als spel niet is afgerond */}
       {!isGameCompleted() && (
         <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
@@ -568,7 +557,7 @@ const MatchNightDetails = () => {
               className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
             >
               <Play className="w-4 h-4" />
-              <span>{startingGame ? 'Starten...' : 'Start Padelavond'}</span>
+              <span>{startingGame ? 'Spel starten...' : 'Start Padelavond'}</span>
             </button>
           )}
 
@@ -580,7 +569,7 @@ const MatchNightDetails = () => {
               className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
             >
               <Play className="w-4 h-4" />
-              <span>{startingGame ? 'Starten...' : 'Nieuw Spel Starten'}</span>
+              <span>{startingGame ? 'Spel starten...' : 'Nieuw Spel Starten'}</span>
             </button>
           )}
 
@@ -605,6 +594,17 @@ const MatchNightDetails = () => {
             >
               <RefreshCw className="w-4 h-4" />
               <span>{recalculatingStats ? 'Herberekenen...' : 'Herbereken Stand'}</span>
+            </button>
+          )}
+
+          {/* Transfer creator button - alleen voor creator */}
+          {isCreator() && !isGameCompleted() && (
+            <button
+              onClick={() => setShowTransferCreatorModal(true)}
+              className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
+            >
+              <Crown className="w-4 h-4" />
+              <span>Creator Overdragen</span>
             </button>
           )}
 
@@ -1011,6 +1011,81 @@ const MatchNightDetails = () => {
                   className="btn-primary"
                 >
                   {submittingResult ? 'Opslaan...' : 'Opslaan'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer Creator Modal */}
+      {showTransferCreatorModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Creator Overdragen
+                </h2>
+                <button
+                  onClick={() => setShowTransferCreatorModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-3 bg-blue-50 rounded">
+                  <p className="text-sm text-blue-900">
+                    <strong>Let op:</strong> Door je creator rechten over te dragen verlies je de controle over deze padelavond. 
+                    De nieuwe creator kan alle instellingen wijzigen en resultaten beheren.
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="new-creator" className="block text-sm font-medium text-gray-700 mb-2">
+                    Selecteer nieuwe creator
+                  </label>
+                  <select
+                    id="new-creator"
+                    value={newCreatorId}
+                    onChange={(e) => setNewCreatorId(e.target.value)}
+                    className="input-field w-full"
+                  >
+                    <option value="">Kies een deelnemer...</option>
+                    {matchNight?.participants?.map((participant) => (
+                      <option key={participant.id} value={participant.id}>
+                        {participant.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {newCreatorId && (
+                  <div className="p-3 bg-green-50 rounded">
+                    <p className="text-sm text-green-900">
+                      Je draagt de creator rechten over aan: <strong>
+                        {matchNight?.participants?.find(p => p.id === parseInt(newCreatorId))?.name}
+                      </strong>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowTransferCreatorModal(false)}
+                  className="btn-secondary"
+                >
+                  Annuleren
+                </button>
+                <button
+                  onClick={handleTransferCreator}
+                  disabled={transferringCreator || !newCreatorId}
+                  className="btn-primary"
+                >
+                  {transferringCreator ? 'Overdragen...' : 'Overdragen'}
                 </button>
               </div>
             </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { matchNightsAPI } from '../services/api';
 import type { MatchNight, CreateMatchNightData } from '../types';
-import { ArrowLeft, Calendar, MapPin, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Save, Trash2, Clock } from 'lucide-react';
 
 const EditMatchNight = () => {
   const { id } = useParams<{ id: string }>();
@@ -10,6 +10,7 @@ const EditMatchNight = () => {
   const [matchNight, setMatchNight] = useState<MatchNight | null>(null);
   const [formData, setFormData] = useState<CreateMatchNightData>({
     date: '',
+    time: '19:00',
     location: '',
     num_courts: 1,
   });
@@ -31,9 +32,15 @@ const EditMatchNight = () => {
       const data = response.data;
       setMatchNight(data);
       
+      // Parse the datetime to separate date and time
+      const dateTime = new Date(data.date);
+      const date = dateTime.toISOString().split('T')[0];
+      const time = dateTime.toTimeString().slice(0, 5); // Get HH:MM format
+      
       // Set form data
       setFormData({
-        date: data.date,
+        date: date,
+        time: time,
         location: data.location,
         num_courts: data.num_courts,
       });
@@ -141,6 +148,22 @@ const EditMatchNight = () => {
               value={formData.date}
               onChange={handleChange}
               min={new Date().toISOString().split('T')[0]}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
+              <Clock className="w-4 h-4 inline mr-2" />
+              Tijdstip
+            </label>
+            <input
+              id="time"
+              name="time"
+              type="time"
+              required
+              className="input-field"
+              value={formData.time}
+              onChange={handleChange}
             />
           </div>
 

@@ -116,6 +116,12 @@ export const matchNightsAPI = {
   
   clearMatches: (matchNightId: number) =>
     api.post(`/api/match-nights/${matchNightId}/clear-matches`),
+  
+  transferCreator: (matchNightId: number, newCreatorId: number) =>
+    api.post(`/api/match-nights/${matchNightId}/transfer-creator`, { new_creator_id: newCreatorId }),
+  
+  deleteCompleted: (matchNightId: number) =>
+    api.delete(`/api/match-nights/${matchNightId}/delete-completed`),
 };
 
 // Matches API

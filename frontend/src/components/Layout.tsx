@@ -19,10 +19,12 @@ const Layout = () => {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <Link to="/dashboard" className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">P</span>
-                </div>
-                <span className="text-lg sm:text-xl font-bold text-gray-900">King Of The Court</span>
+                <img 
+                  src="/logo.png" 
+                  alt="King of the Court Logo" 
+                  className="w-14 h-14 object-contain"
+                />
+                <span className="text-lg sm:text-xl font-bold text-gray-900">King of the Court</span>
               </Link>
             </div>
 

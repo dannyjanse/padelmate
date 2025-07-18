@@ -6,6 +6,8 @@ from schedule_generator import create_matches_for_night
 from extensions import db
 from datetime import datetime
 import json
+import random
+from itertools import combinations
 
 # Blueprints
 auth_bp = Blueprint('auth', __name__)
@@ -315,6 +317,56 @@ def delete_match_night(match_night_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to delete match night'}), 500
+
+@match_nights_bp.route('/<int:match_night_id>/delete-completed', methods=['DELETE'])
+@login_required
+def delete_completed_match_night(match_night_id):
+    """Delete a completed match night (only Danny can do this)"""
+    match_night = MatchNight.query.get_or_404(match_night_id)
+    
+    # Check if user is Danny (user ID 17)
+    if current_user.id != 17:
+        return jsonify({'error': 'Only Danny can delete completed match nights'}), 403
+    
+    # Check if match night is completed
+    if match_night.game_status != 'completed':
+        return jsonify({'error': 'Can only delete completed match nights'}), 400
+    
+    try:
+        # Get all matches for this match night
+        matches = Match.query.filter_by(match_night_id=match_night_id).all()
+        match_ids = [match.id for match in matches]
+        
+        # Delete all related data in the correct order
+        # 1. Delete match results first (foreign key constraint)
+        if match_ids:
+            MatchResult.query.filter(MatchResult.match_id.in_(match_ids)).delete()
+        
+        # 2. Delete player stats
+        PlayerStats.query.filter_by(match_night_id=match_night_id).delete()
+        
+        # 3. Delete matches
+        Match.query.filter_by(match_night_id=match_night_id).delete()
+        
+        # 4. Delete game schemas
+        GameSchema.query.filter_by(match_night_id=match_night_id).delete()
+        
+        # 5. Delete participations
+        Participation.query.filter_by(match_night_id=match_night_id).delete()
+        
+        # 6. Finally delete the match night itself
+        db.session.delete(match_night)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Completed match night at {match_night.location} on {match_night.date.strftime("%d-%m-%Y")} deleted successfully',
+            'deleted_match_night_id': match_night_id
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to delete completed match night: {str(e)}'}), 500
 
 @match_nights_bp.route('/<int:match_night_id>', methods=['GET'])
 @login_required
@@ -1332,15 +1384,19 @@ def clear_matches(match_night_id):
         # Now delete all matches for this match night
         matches_deleted = Match.query.filter_by(match_night_id=match_night_id).delete()
         
+        # Delete all player stats for this match night
+        player_stats_deleted = PlayerStats.query.filter_by(match_night_id=match_night_id).delete()
+        
         # Also delete any game schemas
         game_schemas_deleted = GameSchema.query.filter_by(match_night_id=match_night_id).delete()
         
         db.session.commit()
         
         return jsonify({
-            'message': f'Cleared {matches_deleted} matches, {match_results_deleted} match results, and {game_schemas_deleted} game schemas',
+            'message': f'Cleared {matches_deleted} matches, {match_results_deleted} match results, {player_stats_deleted} player stats, and {game_schemas_deleted} game schemas',
             'matches_deleted': matches_deleted,
             'match_results_deleted': match_results_deleted,
+            'player_stats_deleted': player_stats_deleted,
             'game_schemas_deleted': game_schemas_deleted
         }), 200
         
@@ -1381,7 +1437,29 @@ def start_game(match_night_id):
     ).first()
     
     if existing_game:
-        return jsonify({'error': 'A game is already active for this match night'}), 400
+        # Clear existing game data before starting new game
+        try:
+            # Get all matches for this match night
+            matches = Match.query.filter_by(match_night_id=match_night_id).all()
+            match_ids = [match.id for match in matches]
+            
+            # Delete all match results for these matches first
+            if match_ids:
+                MatchResult.query.filter(MatchResult.match_id.in_(match_ids)).delete()
+            
+            # Delete all matches for this match night
+            Match.query.filter_by(match_night_id=match_night_id).delete()
+            
+            # Delete all player stats for this match night
+            PlayerStats.query.filter_by(match_night_id=match_night_id).delete()
+            
+            # Delete the existing game schema
+            db.session.delete(existing_game)
+            
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': f'Failed to clear existing game data: {str(e)}'}), 500
     
     try:
         # Create new game schema
@@ -1401,18 +1479,12 @@ def start_game(match_night_id):
         matches = []
         try:
             if game_mode == 'everyone_vs_everyone':
-                print(f"Generating everyone vs everyone matches for {len(participants)} participants")
                 matches = generate_everyone_vs_everyone_matches(match_night, game_schema)
             elif game_mode == 'king_of_the_court':
-                print(f"Generating king of the court matches for {len(participants)} participants")
                 matches = generate_king_of_the_court_matches(match_night, game_schema)
-            
-            print(f"Successfully created {len(matches)} matches")
         except Exception as e:
-            print(f"Error generating matches: {str(e)}")
-            import traceback
-            print(f"Traceback: {traceback.format_exc()}")
             # Don't fail the entire request, just log the error
+            pass
         
         return jsonify({
             'message': f'Game started successfully with mode: {game_mode}',
@@ -1515,21 +1587,14 @@ def complete_game(match_night_id):
 
 def generate_everyone_vs_everyone_matches(match_night, game_schema):
     """Generate matches for everyone vs everyone mode using pair-based scheduling"""
-    print(f"Starting generate_everyone_vs_everyone_matches for match_night_id: {match_night.id}")
-    
     participants = Participation.query.filter_by(match_night_id=match_night.id).all()
     participant_ids = [p.user_id for p in participants]
     
-    print(f"Found {len(participants)} participants: {participant_ids}")
-    
     if len(participant_ids) not in [4, 5, 6, 7, 8]:
-        print(f"Not creating matches: need 4, 5, 6, 7, or 8 players, got {len(participant_ids)}")
         return []
     
     # Generate all possible unique pairs
-    from itertools import combinations
     all_pairs = list(combinations(participant_ids, 2))
-    print(f"Generated {len(all_pairs)} unique pairs: {all_pairs}")
     
     # Create schedule based on number of players
     if len(participant_ids) == 4:
@@ -1573,91 +1638,88 @@ def generate_everyone_vs_everyone_matches(match_night, game_schema):
             db.session.add(match)
             
             match_type = "NAAI-PARTIJ" if is_naai_partij else "Normal"
-            print(f"Created match {round_num} ({match_type}): {pair1[0]}&{pair1[1]} vs {pair2[0]}&{pair2[1]}")
     
     try:
         db.session.commit()
-        print(f"Successfully committed {len(matches)} matches to database")
     except Exception as e:
-        print(f"Error committing matches to database: {str(e)}")
         db.session.rollback()
         raise e
     
     return matches
 
 def create_4_player_schedule(players):
-    """Create schedule for 4 players: 3 matches, all pairs play"""
-    # All possible pairs: (1,2), (1,3), (1,4), (2,3), (2,4), (3,4)
-    # Schedule: (1,2) vs (3,4), (1,3) vs (2,4), (1,4) vs (2,3)
-    return [
-        [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4
-        [(players[0], players[2]), (players[1], players[3])],  # 1&3 vs 2&4
-        [(players[0], players[3]), (players[1], players[2])]   # 1&4 vs 2&3
-    ]
+    """Create random schedule for 4 players: 3 matches, all pairs play"""
+    # Generate all possible pairs
+    all_pairs = list(combinations(players, 2))
+    random.shuffle(all_pairs)
+    
+    # Create 3 matches from the 6 possible pairs
+    schedule = []
+    for i in range(0, len(all_pairs), 2):
+        if i + 1 < len(all_pairs):
+            schedule.append([all_pairs[i], all_pairs[i + 1]])
+    
+    return schedule
 
 def create_5_player_schedule(players):
-    """Create schedule for 5 players: 5 matches, all 10 pairs play exactly once"""
-    # All possible pairs: (1,2), (1,3), (1,4), (1,5), (2,3), (2,4), (2,5), (3,4), (3,5), (4,5)
-    # Schedule: 5 matches, each pair plays exactly once
-    return [
-        [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4 (5 rests)
-        [(players[0], players[2]), (players[1], players[4])],  # 1&3 vs 2&5 (4 rests)
-        [(players[0], players[3]), (players[2], players[4])],  # 1&4 vs 3&5 (2 rests)
-        [(players[0], players[4]), (players[1], players[3])],  # 1&5 vs 2&4 (3 rests)
-        [(players[1], players[2]), (players[3], players[4])]   # 2&3 vs 4&5 (1 rests)
-    ]
+    """Create random schedule for 5 players: 5 matches, all 10 pairs play exactly once"""
+    # Generate all possible pairs
+    all_pairs = list(combinations(players, 2))
+    random.shuffle(all_pairs)
+    
+    # Create 5 matches from the 10 possible pairs
+    schedule = []
+    for i in range(0, len(all_pairs), 2):
+        if i + 1 < len(all_pairs):
+            schedule.append([all_pairs[i], all_pairs[i + 1]])
+    
+    return schedule
 
 def create_6_player_schedule(players):
-    """Create schedule for 6 players: 8 matches, all 15 pairs play exactly once + naai-partij"""
-    # All possible pairs: (1,2), (1,3), (1,4), (1,5), (1,6), (2,3), (2,4), (2,5), (2,6), (3,4), (3,5), (3,6), (4,5), (4,6), (5,6)
-    # Schedule: 8 matches, each pair plays exactly once, plus naai-partij for the remaining pair
-    return [
-        [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4 (5,6 rest)
-        [(players[0], players[2]), (players[1], players[4])],  # 1&3 vs 2&5 (3,6 rest)
-        [(players[0], players[3]), (players[2], players[4])],  # 1&4 vs 3&5 (2,6 rest)
-        [(players[0], players[4]), (players[1], players[3])],  # 1&5 vs 2&4 (3,6 rest)
-        [(players[0], players[5]), (players[1], players[2])],  # 1&6 vs 2&3 (4,5 rest)
-        [(players[1], players[5]), (players[2], players[4])],  # 2&6 vs 3&5 (1,4 rest)
-        [(players[2], players[5]), (players[3], players[4])],  # 3&6 vs 4&5 (1,2 rest)
-        [(players[3], players[5]), (players[0], players[1])]   # NAAI-PARTIJ: 4&6 vs 1&2 (3,5 rest) - 4&6 speelt extra, resultaat telt alleen voor 4&6
-    ]
+    """Create random schedule for 6 players: 8 matches, all 15 pairs play exactly once + naai-partij"""
+    # Generate all possible pairs
+    all_pairs = list(combinations(players, 2))
+    random.shuffle(all_pairs)
+    
+    # Create 7 regular matches from the first 14 pairs
+    schedule = []
+    for i in range(0, 14, 2):
+        schedule.append([all_pairs[i], all_pairs[i + 1]])
+    
+    # Add naai-partij with the last pair vs the first pair
+    schedule.append([all_pairs[14], all_pairs[0]])
+    
+    return schedule
 
 def create_7_player_schedule(players):
-    """Create schedule for 7 players: 11 matches, all 21 pairs play exactly once + naai-partij"""
-    # All possible pairs: 21 total, we use all 21 pairs in 11 matches including naai-partij
-    return [
-        [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4 (5,6,7 rest)
-        [(players[0], players[2]), (players[1], players[4])],  # 1&3 vs 2&5 (3,6,7 rest)
-        [(players[0], players[3]), (players[2], players[4])],  # 1&4 vs 3&5 (2,6,7 rest)
-        [(players[0], players[4]), (players[1], players[3])],  # 1&5 vs 2&4 (3,6,7 rest)
-        [(players[0], players[5]), (players[1], players[2])],  # 1&6 vs 2&3 (4,5,7 rest)
-        [(players[0], players[6]), (players[1], players[4])],  # 1&7 vs 2&5 (3,4,6 rest)
-        [(players[1], players[5]), (players[3], players[4])],  # 2&6 vs 4&5 (1,3,7 rest)
-        [(players[1], players[6]), (players[3], players[4])],  # 2&7 vs 4&5 (1,3,6 rest)
-        [(players[2], players[6]), (players[3], players[5])],  # 3&7 vs 4&6 (1,2,5 rest)
-        [(players[4], players[6]), (players[5], players[6])],  # 5&7 vs 6&7 (1,2,3 rest)
-        [(players[3], players[6]), (players[0], players[1])]   # NAAI-PARTIJ: 4&7 vs 1&2 (3,5,6 rest) - 4&7 speelt extra, resultaat telt alleen voor 4&7
-    ]
+    """Create random schedule for 7 players: 11 matches, all 21 pairs play exactly once + naai-partij"""
+    # Generate all possible pairs
+    all_pairs = list(combinations(players, 2))
+    random.shuffle(all_pairs)
+    
+    # Create 10 regular matches from the first 20 pairs
+    schedule = []
+    for i in range(0, 20, 2):
+        schedule.append([all_pairs[i], all_pairs[i + 1]])
+    
+    # Add naai-partij with the last pair vs the first pair
+    schedule.append([all_pairs[20], all_pairs[0]])
+    
+    return schedule
 
 def create_8_player_schedule(players):
-    """Create schedule for 8 players: 14 matches, all 28 pairs play"""
-    # All possible pairs: 28 total, we use all pairs in 14 matches
-    return [
-        [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4 (5,6,7,8 rest)
-        [(players[0], players[2]), (players[1], players[4])],  # 1&3 vs 2&5 (3,6,7,8 rest)
-        [(players[0], players[3]), (players[2], players[4])],  # 1&4 vs 3&5 (2,6,7,8 rest)
-        [(players[0], players[4]), (players[1], players[3])],  # 1&5 vs 2&4 (3,6,7,8 rest)
-        [(players[0], players[5]), (players[1], players[2])],  # 1&6 vs 2&3 (4,5,7,8 rest)
-        [(players[0], players[6]), (players[2], players[5])],  # 1&7 vs 3&6 (2,4,5,8 rest)
-        [(players[0], players[7]), (players[3], players[6])],  # 1&8 vs 4&7 (2,3,5,6 rest)
-        [(players[1], players[5]), (players[2], players[4])],  # 2&6 vs 3&5 (1,4,7,8 rest)
-        [(players[1], players[6]), (players[3], players[4])],  # 2&7 vs 4&5 (1,3,6,8 rest)
-        [(players[1], players[7]), (players[2], players[6])],  # 2&8 vs 3&7 (1,4,5,6 rest)
-        [(players[2], players[7]), (players[3], players[5])],  # 3&8 vs 4&6 (1,2,5,7 rest)
-        [(players[3], players[7]), (players[4], players[5])],  # 4&8 vs 5&6 (1,2,3,7 rest)
-        [(players[4], players[7]), (players[5], players[6])],  # 5&8 vs 6&7 (1,2,3,4 rest)
-        [(players[4], players[6]), (players[5], players[7])]   # 5&7 vs 6&8 (1,2,3,4 rest)
-    ]
+    """Create random schedule for 8 players: 14 matches, all 28 pairs play"""
+    # Generate all possible pairs
+    all_pairs = list(combinations(players, 2))
+    random.shuffle(all_pairs)
+    
+    # Create 14 matches from all 28 pairs
+    schedule = []
+    for i in range(0, len(all_pairs), 2):
+        if i + 1 < len(all_pairs):
+            schedule.append([all_pairs[i], all_pairs[i + 1]])
+    
+    return schedule
 
 def update_player_stats_for_match(match_id):
     """Update player stats for a specific match"""
@@ -1778,3 +1840,49 @@ def recalculate_stats(match_night_id):
             
     except Exception as e:
         return jsonify({'error': f'Failed to recalculate stats: {str(e)}'}), 500 
+
+@match_nights_bp.route('/<int:match_night_id>/transfer-creator', methods=['POST'])
+@login_required
+def transfer_creator(match_night_id):
+    """Transfer creator rights to another user"""
+    data = request.get_json()
+    
+    if not data or 'new_creator_id' not in data:
+        return jsonify({'error': 'New creator ID is required'}), 400
+    
+    new_creator_id = data['new_creator_id']
+    
+    # Get match night
+    match_night = MatchNight.query.get_or_404(match_night_id)
+    
+    # Check if current user is the creator
+    if match_night.creator_id != current_user.id:
+        return jsonify({'error': 'Only the current creator can transfer rights'}), 403
+    
+    # Check if new creator exists
+    new_creator = User.query.get(new_creator_id)
+    if not new_creator:
+        return jsonify({'error': 'New creator not found'}), 404
+    
+    # Check if new creator is a participant
+    participation = Participation.query.filter_by(
+        match_night_id=match_night_id,
+        user_id=new_creator_id
+    ).first()
+    
+    if not participation:
+        return jsonify({'error': 'New creator must be a participant'}), 400
+    
+    try:
+        # Transfer creator rights
+        match_night.creator_id = new_creator_id
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Creator rights transferred to {new_creator.name}',
+            'new_creator': new_creator.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to transfer creator rights: {str(e)}'}), 500
