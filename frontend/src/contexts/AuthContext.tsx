@@ -63,12 +63,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const login = async (username: string, password: string) => {
+    console.log('Login function called with:', username, password);
     try {
+      console.log('Making API call to quick-login...');
       const response = await authAPI.quickLogin({ username, password });
+      console.log('Login response:', response);
       const userData = response.data.user;
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
     } catch (error) {
+      console.error('Login error:', error);
       throw error;
     }
   };
