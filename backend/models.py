@@ -145,13 +145,26 @@ class MatchResult(db.Model):
     
     def set_winner_ids(self, winner_ids):
         """Set winner IDs as JSON string"""
-        self.winner_ids = json.dumps(winner_ids)
+        if winner_ids is None:
+            self.winner_ids = None
+        else:
+            self.winner_ids = json.dumps(winner_ids)
     
     def get_winner_ids(self):
         """Get winner IDs as list"""
-        if self.winner_ids:
+        if not self.winner_ids:
+            return []
+        
+        try:
+            # Handle case where winner_ids might already be a list
+            if isinstance(self.winner_ids, list):
+                return self.winner_ids
+            
+            # Try to parse as JSON
             return json.loads(self.winner_ids)
-        return []
+        except (json.JSONDecodeError, TypeError, ValueError):
+            # If JSON parsing fails, return empty list
+            return []
     
     def to_dict(self):
         return {

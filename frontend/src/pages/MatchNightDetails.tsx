@@ -113,7 +113,6 @@ const MatchNightDetails = () => {
       await fetchGameStatus(); // Refresh game status
       await fetchMatchNight(); // Refresh match night data
       setError(''); // Clear any previous errors
-      alert('Spel gestopt. Je kunt nu een nieuw spel starten.');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Fout bij het stoppen van spel');
     } finally {
@@ -128,7 +127,6 @@ const MatchNightDetails = () => {
       await fetchGameStatus(); // Refresh game status
       await fetchMatchNight(); // Refresh match night data
       setError(''); // Clear any previous errors
-      alert('Alle wedstrijden en spelschema\'s zijn gewist. Je kunt nu een nieuw spel starten.');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Fout bij het wissen van wedstrijden');
     } finally {
@@ -257,7 +255,6 @@ const MatchNightDetails = () => {
         await fetchMatchNight();
         setShowResultModal(false);
         setError('');
-        alert('Uitslag succesvol opgeslagen!');
       } catch (err: any) {
         setError(err.response?.data?.error || 'Fout bij het opslaan van uitslag');
       } finally {
@@ -359,7 +356,6 @@ const MatchNightDetails = () => {
         await fetchGameStatus();
         await fetchMatchNight();
         setError('');
-        alert('Spel succesvol gestart!');
       }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Fout bij het starten van spel');

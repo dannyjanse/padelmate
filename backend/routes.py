@@ -510,6 +510,8 @@ def submit_match_result(match_id):
     data = request.get_json()
     
     print(f"Received data: {data}")
+    print(f"Data type: {type(data)}")
+    print(f"Winner IDs: {data.get('winner_ids') if data else 'No data'}")
     
     if not data:
         print("No data provided")
@@ -519,9 +521,19 @@ def submit_match_result(match_id):
     existing_result = MatchResult.query.filter_by(match_id=match_id).first()
     if existing_result:
         print(f"Updating existing result for match_id: {match_id}")
+        print(f"Existing winner_ids: {existing_result.winner_ids}")
+        
         # Update existing result
         existing_result.score = data.get('score')
+        
+        # Clear existing winner_ids first
+        existing_result.winner_ids = None
+        db.session.flush()  # Flush to clear the old value
+        
+        # Set new winner_ids
         existing_result.set_winner_ids(data.get('winner_ids', []))
+        print(f"New winner_ids set: {existing_result.winner_ids}")
+        
         try:
             db.session.commit()
             
@@ -537,11 +549,14 @@ def submit_match_result(match_id):
     
     result = MatchResult(
         match_id=match_id,
-        score=data.get('score'),
-        winner_ids=data.get('winner_ids', [])
+        score=data.get('score')
     )
     
-    print(f"Creating result: score={result.score}, winner_ids={result.winner_ids}")
+    # Set winner_ids using the proper method
+    winner_ids = data.get('winner_ids', [])
+    print(f"Setting winner_ids: {winner_ids}")
+    result.set_winner_ids(winner_ids)
+    print(f"Result winner_ids after setting: {result.winner_ids}")
     
     try:
         db.session.add(result)
@@ -1738,9 +1753,47 @@ def update_player_stats_for_match(match_id):
     except (ValueError, IndexError):
         return
     
-    # Calculate total points for each team
-    team1_total_points = team1_games
-    team2_total_points = team2_games
+    # Calculate point difference (saldo) for each team
+    team1_point_difference = team1_games - team2_games
+    team2_point_difference = team2_games - team1_games
+    
+    # Check if this is a naai-partij (last match for 6 or 7 players)
+    is_naai_partij = False
+    if match.round >= 8:  # Naai-partijen zijn altijd de laatste wedstrijden
+        is_naai_partij = True
+    
+    # For naai-partijen, determine which pair hasn't played together before
+    naai_partij_players = []
+    if is_naai_partij:
+        # Get all previous matches for this match night
+        previous_matches = Match.query.filter_by(match_night_id=match_night_id).filter(Match.round < match.round).all()
+        
+        # Check which pairs have played together before
+        team1_pair = (match.player1_id, match.player2_id)
+        team2_pair = (match.player3_id, match.player4_id)
+        
+        team1_has_played_together = False
+        team2_has_played_together = False
+        
+        for prev_match in previous_matches:
+            prev_team1 = (prev_match.player1_id, prev_match.player2_id)
+            prev_team2 = (prev_match.player3_id, prev_match.player4_id)
+            
+            # Check if team1 has played together before
+            if (team1_pair == prev_team1 or 
+                (team1_pair[0] in prev_team1 and team1_pair[1] in prev_team1)):
+                team1_has_played_together = True
+            
+            # Check if team2 has played together before
+            if (team2_pair == prev_team2 or 
+                (team2_pair[0] in prev_team2 and team2_pair[1] in prev_team2)):
+                team2_has_played_together = True
+        
+        # Only count points for the pair that hasn't played together before
+        if not team1_has_played_together:
+            naai_partij_players = [match.player1_id, match.player2_id]
+        elif not team2_has_played_together:
+            naai_partij_players = [match.player3_id, match.player4_id]
     
     # Update stats for all players
     for player_id in [match.player1_id, match.player2_id, match.player3_id, match.player4_id]:
@@ -1758,13 +1811,22 @@ def update_player_stats_for_match(match_id):
             )
             db.session.add(player_stat)
         
-        # Add points based on which team the player was on
-        if player_id in [match.player1_id, match.player2_id]:
-            # Player was on team 1
-            player_stat.total_points += team1_total_points
+        # For naai-partijen, only add points if the player is in the pair that hasn't played together
+        if is_naai_partij:
+            if player_id in naai_partij_players:
+                # Add point difference based on which team the player was on
+                if player_id in [match.player1_id, match.player2_id]:
+                    player_stat.total_points += team1_point_difference
+                else:
+                    player_stat.total_points += team2_point_difference
         else:
-            # Player was on team 2
-            player_stat.total_points += team2_total_points
+            # Normal match - add point difference for all players
+            if player_id in [match.player1_id, match.player2_id]:
+                # Player was on team 1
+                player_stat.total_points += team1_point_difference
+            else:
+                # Player was on team 2
+                player_stat.total_points += team2_point_difference
     
     db.session.commit()
 
