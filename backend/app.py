@@ -16,8 +16,14 @@ app = Flask(__name__)
 
 # Configuration
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///padelmate.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Ensure DATABASE_URL is set
+if not app.config['SQLALCHEMY_DATABASE_URI']:
+    raise ValueError("DATABASE_URL environment variable is required")
+
+print(f"Using database: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
 # Initialize extensions
 login_manager = LoginManager()
@@ -59,6 +65,13 @@ def index():
     return jsonify({'message': 'Welcome to PadelMate API'})
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
+    # Only create tables if we're using PostgreSQL (not SQLite)
+    if 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']:
+        with app.app_context():
+            print("Creating database tables...")
+            db.create_all()
+            print("Database tables created successfully!")
+    else:
+        print("Skipping table creation - not using PostgreSQL")
+    
     app.run(debug=True, host='0.0.0.0', port=5000) 

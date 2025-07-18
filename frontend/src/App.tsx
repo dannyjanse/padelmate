@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import MatchNightDetails from './pages/MatchNightDetails'
 import CreateMatchNight from './pages/CreateMatchNight'
 import EditMatchNight from './pages/EditMatchNight'
+import DatabaseSetup from './pages/DatabaseSetup'
 import Layout from './components/Layout'
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
             }>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
+              <Route path="database-setup" element={<DatabaseSetup />} />
               <Route path="match-nights/new" element={<CreateMatchNight />} />
               <Route path="match-nights/:id" element={<MatchNightDetails />} />
               <Route path="match-nights/:id/edit" element={<EditMatchNight />} />

@@ -10,7 +10,7 @@ import type {
   RegisterData 
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -56,6 +56,16 @@ export const authAPI = {
   getCurrentUser: () => api.get<{ user: User }>('/api/auth/me'),
   
   initDatabase: () => api.post('/api/auth/init-db'),
+  
+  createTables: () => api.post('/api/auth/create-tables'),
+  
+  fixMatchNights: () => api.post('/api/auth/fix-match-nights'),
+  
+  testDatabase: () => api.get('/api/auth/test-db'),
+  
+  testUser: () => api.get('/api/auth/test-user'),
+  
+  checkDatabase: () => api.get('/api/auth/check-db'),
   
   getAllUsers: () => api.get<{ users: User[] }>('/api/auth/users'),
 };

@@ -75,18 +75,48 @@ def get_current_user():
 @login_required
 def get_match_nights():
     """Get match nights for current user (created by user or user is participating)"""
-    # Get match nights created by the user
-    created_match_nights = MatchNight.query.filter_by(creator_id=current_user.id).all()
-    
-    # Get match nights where user is participating
-    participations = Participation.query.filter_by(user_id=current_user.id).all()
-    participating_match_nights = [p.match_night for p in participations]
-    
-    # Combine and remove duplicates
-    all_match_nights = list(set(created_match_nights + participating_match_nights))
-    all_match_nights.sort(key=lambda x: x.date, reverse=True)
-    
-    return jsonify({'match_nights': [mn.to_dict() for mn in all_match_nights]}), 200
+    try:
+        print(f"Current user ID: {current_user.id}")
+        print(f"Current user: {current_user.name}")
+        
+        # Check if creator_id column exists before querying
+        with db.engine.connect() as connection:
+            columns = connection.execute(db.text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'match_nights' AND table_schema = 'public'
+            """)).fetchall()
+            
+            column_names = [col[0] for col in columns]
+            print(f"Match_nights columns: {column_names}")
+            
+            if 'creator_id' not in column_names:
+                print("creator_id column missing, returning empty list")
+                return jsonify({'match_nights': []}), 200
+        
+        # Get match nights created by the user
+        created_match_nights = MatchNight.query.filter_by(creator_id=current_user.id).all()
+        print(f"Created match nights: {len(created_match_nights)}")
+        
+        # Get match nights where user is participating
+        participations = Participation.query.filter_by(user_id=current_user.id).all()
+        participating_match_nights = [p.match_night for p in participations]
+        print(f"Participating match nights: {len(participating_match_nights)}")
+        
+        # Combine and remove duplicates
+        all_match_nights = list(set(created_match_nights + participating_match_nights))
+        all_match_nights.sort(key=lambda x: x.date, reverse=True)
+        print(f"Total match nights: {len(all_match_nights)}")
+        
+        result = [mn.to_dict() for mn in all_match_nights]
+        print(f"Result: {result}")
+        
+        return jsonify({'match_nights': result}), 200
+    except Exception as e:
+        import traceback
+        print(f"Error in get_match_nights: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
 
 @match_nights_bp.route('/', methods=['POST'])
 @login_required
@@ -94,13 +124,32 @@ def create_match_night():
     """Create a new match night"""
     data = request.get_json()
     
+    print(f"Creating match night with data: {data}")
+    print(f"Current user ID: {current_user.id}")
+    
     if not data or not all(k in data for k in ('date', 'location')):
         return jsonify({'error': 'Missing required fields'}), 400
     
     try:
         date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        print(f"Parsed date: {date}")
     except ValueError:
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    
+    # Check if creator_id column exists
+    with db.engine.connect() as connection:
+        columns = connection.execute(db.text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'match_nights' AND table_schema = 'public'
+        """)).fetchall()
+        
+        column_names = [col[0] for col in columns]
+        print(f"Match_nights columns: {column_names}")
+        
+        if 'creator_id' not in column_names:
+            print("creator_id column missing, cannot create match night")
+            return jsonify({'error': 'Database structure error: creator_id column missing'}), 500
     
     match_night = MatchNight(
         date=date,
@@ -109,13 +158,19 @@ def create_match_night():
         creator_id=current_user.id
     )
     
+    print(f"Created match_night object: {match_night}")
+    
     try:
         db.session.add(match_night)
         db.session.commit()
+        print(f"Match night created successfully with ID: {match_night.id}")
         return jsonify({'message': 'Match night created', 'match_night': match_night.to_dict()}), 201
     except Exception as e:
+        import traceback
+        print(f"Error creating match night: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
         db.session.rollback()
-        return jsonify({'error': 'Failed to create match night'}), 500
+        return jsonify({'error': f'Failed to create match night: {str(e)}'}), 500
 
 @match_nights_bp.route('/<int:match_night_id>', methods=['PUT'])
 @login_required
@@ -496,6 +551,97 @@ def test_endpoint():
         }
     }), 200
 
+# Test database connection
+@auth_bp.route('/test-db', methods=['GET'])
+def test_database():
+    """Test database connection and basic queries"""
+    try:
+        print("Testing database connection...")
+        
+        # Test basic connection using with statement
+        with db.engine.connect() as connection:
+            result = connection.execute(db.text('SELECT 1'))
+            print("Basic connection test passed")
+            
+            # Test if tables exist
+            tables = connection.execute(db.text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """)).fetchall()
+            
+            table_names = [row[0] for row in tables]
+            print(f"Found tables: {table_names}")
+        
+        return jsonify({
+            'message': 'Database connection successful',
+            'tables': table_names,
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        import traceback
+        print(f"Database test error: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'message': 'Database connection failed',
+            'error': str(e),
+            'status': 'error'
+        }), 500
+
+# Test current user
+@auth_bp.route('/test-user', methods=['GET'])
+@login_required
+def test_current_user():
+    """Test current user and their data"""
+    try:
+        print(f"Testing current user: {current_user.name} (ID: {current_user.id})")
+        
+        # Test if user exists in database
+        user_from_db = User.query.get(current_user.id)
+        if not user_from_db:
+            raise Exception(f"User {current_user.id} not found in database")
+        
+        print("User found in database")
+        
+        # Check if creator_id column exists before querying
+        with db.engine.connect() as connection:
+            columns = connection.execute(db.text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'match_nights' AND table_schema = 'public'
+            """)).fetchall()
+            
+            column_names = [col[0] for col in columns]
+            print(f"Match_nights columns: {column_names}")
+            
+            if 'creator_id' not in column_names:
+                print("creator_id column missing, skipping match nights query")
+                created_match_nights = []
+            else:
+                # Get user's match nights
+                created_match_nights = MatchNight.query.filter_by(creator_id=current_user.id).all()
+                print(f"Found {len(created_match_nights)} created match nights")
+        
+        participations = Participation.query.filter_by(user_id=current_user.id).all()
+        print(f"Found {len(participations)} participations")
+        
+        return jsonify({
+            'user': current_user.to_dict(),
+            'created_match_nights': len(created_match_nights),
+            'participations': len(participations),
+            'match_nights_columns': column_names,
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        import traceback
+        print(f"User test error: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'message': 'User test failed',
+            'error': str(e),
+            'status': 'error'
+        }), 500
+
 # Simple database check endpoint
 @auth_bp.route('/check-db', methods=['GET'])
 def check_database():
@@ -510,6 +656,135 @@ def check_database():
     except Exception as e:
         return jsonify({
             'message': 'Database error',
+            'error': str(e),
+            'status': 'error'
+        }), 500
+
+# Database tables creation endpoint
+@auth_bp.route('/create-tables', methods=['POST'])
+def create_tables():
+    """Create all database tables"""
+    try:
+        print("Creating database tables...")
+        
+        # Drop all tables first to ensure clean slate
+        with db.engine.connect() as connection:
+            print("Dropping all existing tables...")
+            connection.execute(db.text("DROP SCHEMA public CASCADE"))
+            connection.execute(db.text("CREATE SCHEMA public"))
+            connection.commit()
+            print("All tables dropped successfully")
+        
+        # Create all tables
+        db.create_all()
+        print("Database tables created successfully!")
+        
+        # Verify tables were created
+        with db.engine.connect() as connection:
+            tables = connection.execute(db.text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """)).fetchall()
+            
+            table_names = [row[0] for row in tables]
+            print(f"Available tables: {table_names}")
+            
+            # Check table structure
+            for table in table_names:
+                columns = connection.execute(db.text(f"""
+                    SELECT column_name, data_type 
+                    FROM information_schema.columns 
+                    WHERE table_name = '{table}' AND table_schema = 'public'
+                """)).fetchall()
+                print(f"Table {table} columns: {[col[0] for col in columns]}")
+        
+        return jsonify({
+            'message': 'Database tables created successfully',
+            'tables': table_names,
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        import traceback
+        print(f"Failed to create tables: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'message': 'Failed to create tables',
+            'error': str(e),
+            'status': 'error'
+        }), 500
+
+# Fix match_nights table specifically
+@auth_bp.route('/fix-match-nights', methods=['POST'])
+def fix_match_nights_table():
+    """Fix the match_nights table structure"""
+    try:
+        print("Fixing match_nights table...")
+        
+        with db.engine.connect() as connection:
+            # Check if creator_id column exists
+            columns = connection.execute(db.text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'match_nights' AND table_schema = 'public'
+            """)).fetchall()
+            
+            column_names = [col[0] for col in columns]
+            print(f"Current match_nights columns: {column_names}")
+            
+            # Try to add missing columns if they don't exist
+            if 'creator_id' not in column_names:
+                print("Adding creator_id column...")
+                try:
+                    connection.execute(db.text("ALTER TABLE match_nights ADD COLUMN creator_id INTEGER"))
+                    connection.execute(db.text("ALTER TABLE match_nights ADD CONSTRAINT fk_match_nights_creator FOREIGN KEY (creator_id) REFERENCES users(id)"))
+                    print("creator_id column added successfully")
+                except Exception as e:
+                    print(f"Failed to add creator_id column: {str(e)}")
+                    # Try alternative approach - recreate table
+                    print("Trying to recreate match_nights table...")
+                    connection.execute(db.text("DROP TABLE IF EXISTS match_nights CASCADE"))
+                    connection.commit()
+                    # Let SQLAlchemy recreate the table
+                    db.create_all()
+                    print("Match_nights table recreated successfully")
+            else:
+                print("creator_id column already exists")
+            
+            if 'created_at' not in column_names:
+                print("Adding created_at column...")
+                try:
+                    connection.execute(db.text("ALTER TABLE match_nights ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
+                    print("created_at column added successfully")
+                except Exception as e:
+                    print(f"Failed to add created_at column: {str(e)}")
+            else:
+                print("created_at column already exists")
+            
+            connection.commit()
+            print("Match_nights table fixed successfully!")
+            
+            # Verify the fix
+            columns_after = connection.execute(db.text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'match_nights' AND table_schema = 'public'
+            """)).fetchall()
+            
+            column_names_after = [col[0] for col in columns_after]
+            print(f"Match_nights columns after fix: {column_names_after}")
+        
+        return jsonify({
+            'message': 'Match_nights table fixed successfully',
+            'columns': column_names_after,
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        import traceback
+        print(f"Failed to fix match_nights table: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'message': 'Failed to fix match_nights table',
             'error': str(e),
             'status': 'error'
         }), 500 
