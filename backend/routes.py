@@ -60,6 +60,73 @@ def login():
     else:
         return jsonify({'error': 'Invalid username or password'}), 401
 
+@auth_bp.route('/quick-login', methods=['POST'])
+def quick_login():
+    """Quick login that creates a test user if none exist"""
+    data = request.get_json()
+    
+    if not data or not all(k in data for k in ('username', 'password')):
+        return jsonify({'error': 'Missing username or password'}), 400
+    
+    # Check if any users exist
+    user_count = User.query.count()
+    
+    if user_count == 0:
+        # Create test users if none exist
+        test_users = [
+            {'name': 'Danny', 'email': 'danny@example.com', 'password': 'password'},
+            {'name': 'Branko', 'email': 'branko@example.com', 'password': 'password'},
+            {'name': 'Tukkie', 'email': 'tukkie@example.com', 'password': 'password'},
+            {'name': 'Michiel', 'email': 'michiel@example.com', 'password': 'password'},
+            {'name': 'Jeroen', 'email': 'jeroen@example.com', 'password': 'password'},
+            {'name': 'Joost', 'email': 'joost@example.com', 'password': 'password'}
+        ]
+        
+        for user_data in test_users:
+            user = User(
+                name=user_data['name'],
+                email=user_data['email']
+            )
+            user.set_password(user_data['password'])
+            db.session.add(user)
+        
+        db.session.commit()
+        print("Created test users for quick login")
+        
+        # Create a test match night if none exist
+        match_night_count = MatchNight.query.count()
+        if match_night_count == 0:
+            danny = User.query.filter_by(name='Danny').first()
+            if danny:
+                test_match_night = MatchNight(
+                    date=datetime.now().date(),
+                    location='Padelcentrum Amsterdam',
+                    num_courts=2,
+                    creator_id=danny.id
+                )
+                db.session.add(test_match_night)
+                db.session.commit()
+                
+                # Add all users as participants
+                for user in User.query.all():
+                    participation = Participation(
+                        user_id=user.id,
+                        match_night_id=test_match_night.id
+                    )
+                    db.session.add(participation)
+                
+                db.session.commit()
+                print(f"Created test match night with ID: {test_match_night.id}")
+    
+    # Now try to find the user
+    user = User.query.filter_by(name=data['username']).first()
+    
+    if user and user.check_password(data['password']):
+        login_user(user)
+        return jsonify({'message': 'Login successful', 'user': user.to_dict()}), 200
+    else:
+        return jsonify({'error': 'Invalid username or password'}), 401
+
 @auth_bp.route('/logout', methods=['POST'])
 @login_required
 def logout():
@@ -253,8 +320,15 @@ def get_match_night(match_night_id):
     participations = Participation.query.filter_by(match_night_id=match_night_id).all()
     participants = [p.user.to_dict() for p in participations]
     
-    # Get matches
+    # Get matches with all relationships loaded
     matches = Match.query.filter_by(match_night_id=match_night_id).order_by(Match.round, Match.court).all()
+    
+    # Load all player relationships for matches
+    for match in matches:
+        match.player1 = User.query.get(match.player1_id)
+        match.player2 = User.query.get(match.player2_id)
+        match.player3 = User.query.get(match.player3_id)
+        match.player4 = User.query.get(match.player4_id)
     
     result = match_night.to_dict()
     result['participants'] = participants
@@ -363,16 +437,31 @@ def generate_schedule(match_night_id):
 @login_required
 def submit_match_result(match_id):
     """Submit result for a match"""
+    print(f"Submitting result for match_id: {match_id}")
     match = Match.query.get_or_404(match_id)
     data = request.get_json()
     
+    print(f"Received data: {data}")
+    
     if not data:
+        print("No data provided")
         return jsonify({'error': 'No data provided'}), 400
     
     # Check if result already exists
     existing_result = MatchResult.query.filter_by(match_id=match_id).first()
     if existing_result:
-        return jsonify({'error': 'Result already submitted for this match'}), 400
+        print(f"Updating existing result for match_id: {match_id}")
+        # Update existing result
+        existing_result.score = data.get('score')
+        existing_result.set_winner_ids(data.get('winner_ids', []))
+        try:
+            db.session.commit()
+            print(f"Result updated successfully for match_id: {match_id}")
+            return jsonify({'message': 'Result updated successfully', 'result': existing_result.to_dict()}), 200
+        except Exception as e:
+            print(f"Error updating result: {str(e)}")
+            db.session.rollback()
+            return jsonify({'error': f'Failed to update result: {str(e)}'}), 500
     
     result = MatchResult(
         match_id=match_id,
@@ -380,13 +469,17 @@ def submit_match_result(match_id):
         winner_ids=data.get('winner_ids', [])
     )
     
+    print(f"Creating result: score={result.score}, winner_ids={result.winner_ids}")
+    
     try:
         db.session.add(result)
         db.session.commit()
+        print(f"Result submitted successfully for match_id: {match_id}")
         return jsonify({'message': 'Result submitted successfully', 'result': result.to_dict()}), 201
     except Exception as e:
+        print(f"Error submitting result: {str(e)}")
         db.session.rollback()
-        return jsonify({'error': 'Failed to submit result'}), 500
+        return jsonify({'error': f'Failed to submit result: {str(e)}'}), 500
 
 @matches_bp.route('/<int:match_id>/result', methods=['GET'])
 @login_required
@@ -842,3 +935,535 @@ def add_users():
         print(f"Failed to add users: {str(e)}")
         print(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': f'Failed to add users: {str(e)}'}), 500 
+
+# Reinitialize database with test data
+@auth_bp.route('/reinit-db', methods=['POST'])
+def reinitialize_database():
+    """Reinitialize database with test data after schema changes"""
+    try:
+        print("Reinitializing database with test data...")
+        
+        # Create all tables
+        db.create_all()
+        print("Database tables created successfully!")
+        
+        # Clear existing data
+        db.session.query(MatchResult).delete()
+        db.session.query(Match).delete()
+        db.session.query(Participation).delete()
+        db.session.query(MatchNight).delete()
+        db.session.query(User).delete()
+        db.session.commit()
+        print("Existing data cleared")
+        
+        # Create test users
+        users_data = [
+            {'name': 'Danny', 'email': 'danny@example.com', 'password': 'password'},
+            {'name': 'Branko', 'email': 'branko@example.com', 'password': 'password'},
+            {'name': 'Tukkie', 'email': 'tukkie@example.com', 'password': 'password'},
+            {'name': 'Michiel', 'email': 'michiel@example.com', 'password': 'password'},
+            {'name': 'Jeroen', 'email': 'jeroen@example.com', 'password': 'password'},
+            {'name': 'Joost', 'email': 'joost@example.com', 'password': 'password'}
+        ]
+        
+        created_users = []
+        for user_data in users_data:
+            user = User(
+                name=user_data['name'],
+                email=user_data['email']
+            )
+            user.set_password(user_data['password'])
+            db.session.add(user)
+            created_users.append(user_data['name'])
+        
+        db.session.commit()
+        print(f"Created {len(created_users)} users: {created_users}")
+        
+        # Create a test match night
+        danny = User.query.filter_by(name='Danny').first()
+        if danny:
+            test_match_night = MatchNight(
+                date=datetime.now().date(),
+                location='Padelcentrum Amsterdam',
+                num_courts=2,
+                creator_id=danny.id
+            )
+            db.session.add(test_match_night)
+            db.session.commit()
+            
+            # Add all users as participants
+            for user in User.query.all():
+                participation = Participation(
+                    user_id=user.id,
+                    match_night_id=test_match_night.id
+                )
+                db.session.add(participation)
+            
+            db.session.commit()
+            print(f"Created test match night with ID: {test_match_night.id}")
+        
+        return jsonify({
+            'message': 'Database reinitialized successfully',
+            'users_created': created_users,
+            'test_match_night_created': True
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        print(f"Failed to reinitialize database: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': f'Failed to reinitialize database: {str(e)}'}), 500
+
+# Debug endpoint to check database state
+@auth_bp.route('/debug-db', methods=['GET'])
+def debug_database():
+    """Debug endpoint to check database state"""
+    try:
+        users = User.query.all()
+        match_nights = MatchNight.query.all()
+        participations = Participation.query.all()
+        
+        # Try to get matches, but handle missing column error
+        try:
+            matches = Match.query.all()
+            matches_count = len(matches)
+        except Exception as e:
+            print(f"Matches query failed: {str(e)}")
+            matches_count = 0
+            matches = []
+        
+        return jsonify({
+            'users_count': len(users),
+            'users': [user.to_dict() for user in users],
+            'match_nights_count': len(match_nights),
+            'match_nights': [mn.to_dict() for mn in match_nights],
+            'participations_count': len(participations),
+            'matches_count': matches_count
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'Debug failed: {str(e)}'}), 500
+
+# Fix database schema
+@auth_bp.route('/fix-schema', methods=['POST'])
+def fix_database_schema():
+    """Fix database schema issues"""
+    try:
+        print("Fixing database schema...")
+        
+        with db.engine.connect() as connection:
+            # Check if game_schema_id column exists in matches table
+            columns = connection.execute(db.text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'matches' AND table_schema = 'public'
+            """)).fetchall()
+            
+            column_names = [col[0] for col in columns]
+            print(f"Matches table columns: {column_names}")
+            
+            # Add missing columns if they don't exist
+            if 'game_schema_id' not in column_names:
+                print("Adding game_schema_id column to matches table...")
+                try:
+                    connection.execute(db.text("ALTER TABLE matches ADD COLUMN game_schema_id INTEGER"))
+                    connection.execute(db.text("ALTER TABLE matches ADD CONSTRAINT fk_matches_game_schema FOREIGN KEY (game_schema_id) REFERENCES game_schemas(id)"))
+                    print("game_schema_id column added successfully")
+                except Exception as e:
+                    print(f"Failed to add game_schema_id column: {str(e)}")
+            
+            # Check if game_schemas table exists
+            tables = connection.execute(db.text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """)).fetchall()
+            
+            table_names = [table[0] for table in tables]
+            print(f"Available tables: {table_names}")
+            
+            if 'game_schemas' not in table_names:
+                print("Creating game_schemas table...")
+                # Drop and recreate all tables to ensure proper schema
+                connection.execute(db.text("DROP SCHEMA public CASCADE"))
+                connection.execute(db.text("CREATE SCHEMA public"))
+                connection.commit()
+                
+                # Let SQLAlchemy recreate all tables
+                db.create_all()
+                print("All tables recreated successfully")
+            
+            connection.commit()
+            print("Database schema fixed successfully!")
+        
+        return jsonify({
+            'message': 'Database schema fixed successfully',
+            'status': 'success'
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        print(f"Failed to fix database schema: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': f'Failed to fix database schema: {str(e)}'}), 500
+
+# Debug matches for a match night
+@match_nights_bp.route('/<int:match_night_id>/debug-matches', methods=['GET'])
+@login_required
+def debug_matches(match_night_id):
+    """Debug endpoint to check matches for a specific match night"""
+    try:
+        matches = Match.query.filter_by(match_night_id=match_night_id).all()
+        
+        matches_data = []
+        for match in matches:
+            match_data = {
+                'id': match.id,
+                'round': match.round,
+                'court': match.court,
+                'player1_id': match.player1_id,
+                'player2_id': match.player2_id,
+                'player3_id': match.player3_id,
+                'player4_id': match.player4_id,
+                'game_schema_id': match.game_schema_id,
+                'created_at': match.created_at.isoformat() if match.created_at else None
+            }
+            
+            # Load player names
+            player1 = User.query.get(match.player1_id)
+            player2 = User.query.get(match.player2_id)
+            player3 = User.query.get(match.player3_id)
+            player4 = User.query.get(match.player4_id)
+            
+            match_data['player1_name'] = player1.name if player1 else 'Unknown'
+            match_data['player2_name'] = player2.name if player2 else 'Unknown'
+            match_data['player3_name'] = player3.name if player3 else 'Unknown'
+            match_data['player4_name'] = player4.name if player4 else 'Unknown'
+            
+            matches_data.append(match_data)
+        
+        return jsonify({
+            'match_night_id': match_night_id,
+            'matches_count': len(matches),
+            'matches': matches_data
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'Debug matches failed: {str(e)}'}), 500
+
+# Clear all matches for a match night
+@match_nights_bp.route('/<int:match_night_id>/clear-matches', methods=['POST'])
+@login_required
+def clear_matches(match_night_id):
+    """Clear all matches for a match night"""
+    # Get match night
+    match_night = MatchNight.query.get_or_404(match_night_id)
+    
+    # Check if user is the creator
+    if match_night.creator_id != current_user.id:
+        return jsonify({'error': 'Only the creator can clear matches'}), 403
+    
+    try:
+        # Delete all matches for this match night
+        matches_deleted = Match.query.filter_by(match_night_id=match_night_id).delete()
+        
+        # Also delete any game schemas
+        game_schemas_deleted = GameSchema.query.filter_by(match_night_id=match_night_id).delete()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Cleared {matches_deleted} matches and {game_schemas_deleted} game schemas',
+            'matches_deleted': matches_deleted,
+            'game_schemas_deleted': game_schemas_deleted
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to clear matches: {str(e)}'}), 500
+
+# Game Schema routes
+@game_schemas_bp.route('/<int:match_night_id>/start', methods=['POST'])
+@login_required
+def start_game(match_night_id):
+    """Start a game with a specific game mode"""
+    data = request.get_json()
+    
+    if not data or 'game_mode' not in data:
+        return jsonify({'error': 'Game mode is required'}), 400
+    
+    game_mode = data['game_mode']
+    if game_mode not in ['everyone_vs_everyone', 'king_of_the_court']:
+        return jsonify({'error': 'Invalid game mode'}), 400
+    
+    # Get match night
+    match_night = MatchNight.query.get_or_404(match_night_id)
+    
+    # Check if user is the creator
+    if match_night.creator_id != current_user.id:
+        return jsonify({'error': 'Only the creator can start a game'}), 403
+    
+    # Check if there are enough participants
+    participants = Participation.query.filter_by(match_night_id=match_night_id).all()
+    if len(participants) < 4:
+        return jsonify({'error': 'Need at least 4 participants to start a game'}), 400
+    
+    # Check if a game is already active
+    existing_game = GameSchema.query.filter_by(
+        match_night_id=match_night_id,
+        status='active'
+    ).first()
+    
+    if existing_game:
+        return jsonify({'error': 'A game is already active for this match night'}), 400
+    
+    try:
+        # Create new game schema
+        game_schema = GameSchema(
+            match_night_id=match_night_id,
+            game_mode=game_mode,
+            status='active'
+        )
+        db.session.add(game_schema)
+        db.session.commit()
+        
+        # Generate matches based on game mode
+        matches = []
+        try:
+            if game_mode == 'everyone_vs_everyone':
+                print(f"Generating everyone vs everyone matches for {len(participants)} participants")
+                matches = generate_everyone_vs_everyone_matches(match_night, game_schema)
+            elif game_mode == 'king_of_the_court':
+                print(f"Generating king of the court matches for {len(participants)} participants")
+                matches = generate_king_of_the_court_matches(match_night, game_schema)
+            
+            print(f"Successfully created {len(matches)} matches")
+        except Exception as e:
+            print(f"Error generating matches: {str(e)}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            # Don't fail the entire request, just log the error
+        
+        return jsonify({
+            'message': f'Game started successfully with mode: {game_mode}',
+            'game_schema': game_schema.to_dict(),
+            'matches_created': len(matches),
+            'participants_count': len(participants)
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to start game: {str(e)}'}), 500
+
+@game_schemas_bp.route('/<int:match_night_id>/status', methods=['GET'])
+@login_required
+def get_game_status(match_night_id):
+    """Get the current game status for a match night"""
+    game_schema = GameSchema.query.filter_by(
+        match_night_id=match_night_id,
+        status='active'
+    ).first()
+    
+    if not game_schema:
+        return jsonify({'game_active': False}), 200
+    
+    return jsonify({
+        'game_active': True,
+        'game_schema': game_schema.to_dict()
+    }), 200
+
+@game_schemas_bp.route('/<int:match_night_id>/stop', methods=['POST'])
+@login_required
+def stop_game(match_night_id):
+    """Stop the current active game"""
+    # Get match night
+    match_night = MatchNight.query.get_or_404(match_night_id)
+    
+    # Check if user is the creator
+    if match_night.creator_id != current_user.id:
+        return jsonify({'error': 'Only the creator can stop the game'}), 403
+    
+    # Find active game
+    active_game = GameSchema.query.filter_by(
+        match_night_id=match_night_id,
+        status='active'
+    ).first()
+    
+    if not active_game:
+        return jsonify({'error': 'No active game found'}), 404
+    
+    try:
+        # Mark game as completed
+        active_game.status = 'completed'
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Game stopped successfully',
+            'game_schema': active_game.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to stop game: {str(e)}'}), 500
+
+def generate_everyone_vs_everyone_matches(match_night, game_schema):
+    """Generate matches for everyone vs everyone mode using pair-based scheduling"""
+    print(f"Starting generate_everyone_vs_everyone_matches for match_night_id: {match_night.id}")
+    
+    participants = Participation.query.filter_by(match_night_id=match_night.id).all()
+    participant_ids = [p.user_id for p in participants]
+    
+    print(f"Found {len(participants)} participants: {participant_ids}")
+    
+    if len(participant_ids) not in [4, 5, 6, 7, 8]:
+        print(f"Not creating matches: need 4, 5, 6, 7, or 8 players, got {len(participant_ids)}")
+        return []
+    
+    # Generate all possible unique pairs
+    from itertools import combinations
+    all_pairs = list(combinations(participant_ids, 2))
+    print(f"Generated {len(all_pairs)} unique pairs: {all_pairs}")
+    
+    # Create schedule based on number of players
+    if len(participant_ids) == 4:
+        # For 4 players: 3 matches, all pairs play
+        schedule = create_4_player_schedule(participant_ids)
+    elif len(participant_ids) == 5:
+        # For 5 players: 5 matches, 10 pairs play (5 pairs don't play)
+        schedule = create_5_player_schedule(participant_ids)
+    elif len(participant_ids) == 6:
+        # For 6 players: 8 matches, 16 pairs play (1 pair doesn't play)
+        schedule = create_6_player_schedule(participant_ids)
+    elif len(participant_ids) == 7:
+        # For 7 players: 10 matches, 20 pairs play (1 pair doesn't play)
+        schedule = create_7_player_schedule(participant_ids)
+    elif len(participant_ids) == 8:
+        # For 8 players: 14 matches, 28 pairs play (all pairs play)
+        schedule = create_8_player_schedule(participant_ids)
+    
+    # Create matches from schedule
+    matches = []
+    for round_num, match_pairs in enumerate(schedule, 1):
+        if len(match_pairs) == 2:  # One match per round
+            pair1, pair2 = match_pairs
+            match = Match(
+                match_night_id=match_night.id,
+                game_schema_id=game_schema.id,
+                player1_id=pair1[0],
+                player2_id=pair1[1],
+                player3_id=pair2[0],
+                player4_id=pair2[1],
+                round=round_num,
+                court=1
+            )
+            matches.append(match)
+            db.session.add(match)
+            print(f"Created match {round_num}: {pair1[0]}&{pair1[1]} vs {pair2[0]}&{pair2[1]}")
+    
+    try:
+        db.session.commit()
+        print(f"Successfully committed {len(matches)} matches to database")
+    except Exception as e:
+        print(f"Error committing matches to database: {str(e)}")
+        db.session.rollback()
+        raise e
+    
+    return matches
+
+def create_4_player_schedule(players):
+    """Create schedule for 4 players: 3 matches, all pairs play"""
+    # All possible pairs: (1,2), (1,3), (1,4), (2,3), (2,4), (3,4)
+    # Schedule: (1,2) vs (3,4), (1,3) vs (2,4), (1,4) vs (2,3)
+    return [
+        [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4
+        [(players[0], players[2]), (players[1], players[3])],  # 1&3 vs 2&4
+        [(players[0], players[3]), (players[1], players[2])]   # 1&4 vs 2&3
+    ]
+
+def create_5_player_schedule(players):
+    """Create schedule for 5 players: 5 matches, 10 pairs play (5 pairs don't play)"""
+    # All possible pairs: (1,2), (1,3), (1,4), (1,5), (2,3), (2,4), (2,5), (3,4), (3,5), (4,5)
+    # Schedule: 5 matches, each player plays 4 times, rests 1 time
+    return [
+        [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4 (5 rests)
+        [(players[0], players[2]), (players[1], players[4])],  # 1&3 vs 2&5 (4 rests)
+        [(players[0], players[3]), (players[2], players[4])],  # 1&4 vs 3&5 (2 rests)
+        [(players[0], players[4]), (players[1], players[3])],  # 1&5 vs 2&4 (3 rests)
+        [(players[1], players[2]), (players[3], players[4])]   # 2&3 vs 4&5 (1 rests)
+    ]
+
+def create_6_player_schedule(players):
+    """Create schedule for 6 players: 8 matches, 16 pairs play (1 pair doesn't play)"""
+    # All possible pairs: (1,2), (1,3), (1,4), (1,5), (1,6), (2,3), (2,4), (2,5), (2,6), (3,4), (3,5), (3,6), (4,5), (4,6), (5,6)
+    # Schedule: 8 matches, each player plays 5-6 times, rests 2-3 times
+    return [
+        [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4 (5,6 rest)
+        [(players[0], players[2]), (players[1], players[4])],  # 1&3 vs 2&5 (3,6 rest)
+        [(players[0], players[3]), (players[2], players[4])],  # 1&4 vs 3&5 (2,6 rest)
+        [(players[0], players[4]), (players[1], players[3])],  # 1&5 vs 2&4 (3,6 rest)
+        [(players[0], players[5]), (players[1], players[2])],  # 1&6 vs 2&3 (4,5 rest)
+        [(players[1], players[5]), (players[2], players[4])],  # 2&6 vs 3&5 (1,4 rest)
+        [(players[2], players[5]), (players[3], players[4])],  # 3&6 vs 4&5 (1,2 rest)
+        [(players[3], players[5]), (players[0], players[1])]   # 4&6 vs 1&2 (3,5 rest) - Note: 1&2 plays twice, but this is acceptable for 6 players
+    ]
+
+def create_7_player_schedule(players):
+    """Create schedule for 7 players: 10 matches, 20 pairs play (1 pair doesn't play)"""
+    # All possible pairs: 21 total, we use 20 pairs in 10 matches
+    return [
+        [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4 (5,6,7 rest)
+        [(players[0], players[2]), (players[1], players[4])],  # 1&3 vs 2&5 (3,6,7 rest)
+        [(players[0], players[3]), (players[2], players[4])],  # 1&4 vs 3&5 (2,6,7 rest)
+        [(players[0], players[4]), (players[1], players[3])],  # 1&5 vs 2&4 (3,6,7 rest)
+        [(players[0], players[5]), (players[1], players[2])],  # 1&6 vs 2&3 (4,5,7 rest)
+        [(players[0], players[6]), (players[2], players[5])],  # 1&7 vs 3&6 (2,4,5 rest)
+        [(players[1], players[5]), (players[2], players[4])],  # 2&6 vs 3&5 (1,4,7 rest)
+        [(players[1], players[6]), (players[3], players[4])],  # 2&7 vs 4&5 (1,3,6 rest)
+        [(players[2], players[6]), (players[3], players[5])],  # 3&7 vs 4&6 (1,2,5 rest)
+        [(players[4], players[6]), (players[5], players[6])]   # 5&7 vs 6&7 (1,2,3 rest) - Note: 6&7 plays twice, but this is acceptable for 7 players
+    ]
+
+def create_8_player_schedule(players):
+    """Create schedule for 8 players: 14 matches, all 28 pairs play"""
+    # All possible pairs: 28 total, we use all pairs in 14 matches
+    return [
+        [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4 (5,6,7,8 rest)
+        [(players[0], players[2]), (players[1], players[4])],  # 1&3 vs 2&5 (3,6,7,8 rest)
+        [(players[0], players[3]), (players[2], players[4])],  # 1&4 vs 3&5 (2,6,7,8 rest)
+        [(players[0], players[4]), (players[1], players[3])],  # 1&5 vs 2&4 (3,6,7,8 rest)
+        [(players[0], players[5]), (players[1], players[2])],  # 1&6 vs 2&3 (4,5,7,8 rest)
+        [(players[0], players[6]), (players[2], players[5])],  # 1&7 vs 3&6 (2,4,5,8 rest)
+        [(players[0], players[7]), (players[3], players[6])],  # 1&8 vs 4&7 (2,3,5,6 rest)
+        [(players[1], players[5]), (players[2], players[4])],  # 2&6 vs 3&5 (1,4,7,8 rest)
+        [(players[1], players[6]), (players[3], players[4])],  # 2&7 vs 4&5 (1,3,6,8 rest)
+        [(players[1], players[7]), (players[2], players[6])],  # 2&8 vs 3&7 (1,4,5,6 rest)
+        [(players[2], players[7]), (players[3], players[5])],  # 3&8 vs 4&6 (1,2,5,7 rest)
+        [(players[3], players[7]), (players[4], players[5])],  # 4&8 vs 5&6 (1,2,3,7 rest)
+        [(players[4], players[7]), (players[5], players[6])],  # 5&8 vs 6&7 (1,2,3,4 rest)
+        [(players[4], players[6]), (players[5], players[7])]   # 5&7 vs 6&8 (1,2,3,4 rest)
+    ]
+
+def generate_king_of_the_court_matches(match_night, game_schema):
+    """Generate initial matches for king of the court mode"""
+    participants = Participation.query.filter_by(match_night_id=match_night.id).all()
+    participant_ids = [p.user_id for p in participants]
+    
+    matches = []
+    
+    # For king of the court, we start with one match
+    # Winners stay, losers go to queue
+    if len(participant_ids) >= 4:
+        match = Match(
+            match_night_id=match_night.id,
+            game_schema_id=game_schema.id,
+            player1_id=participant_ids[0],
+            player2_id=participant_ids[1],
+            player3_id=participant_ids[2],
+            player4_id=participant_ids[3],
+            round=1,
+            court=1
+        )
+        matches.append(match)
+        db.session.add(match)
+    
+    db.session.commit()
+    return matches 

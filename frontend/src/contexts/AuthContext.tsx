@@ -62,7 +62,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (username: string, password: string) => {
     try {
-      const response = await authAPI.login({ username, password });
+      const response = await authAPI.quickLogin({ username, password });
       const userData = response.data.user;
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));

@@ -34,15 +34,16 @@ login_manager.login_view = None  # Disable redirect for API
 CORS(app, supports_credentials=True)
 
 # Import models after db initialization
-from models import User, MatchNight, Participation, Match, MatchResult
+from models import User, MatchNight, Participation, Match, MatchResult, GameSchema
 
 # Import routes after models
-from routes import auth_bp, match_nights_bp, matches_bp
+from routes import auth_bp, match_nights_bp, matches_bp, game_schemas_bp
 
 # Register blueprints
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(match_nights_bp, url_prefix='/api/match-nights')
 app.register_blueprint(matches_bp, url_prefix='/api/matches')
+app.register_blueprint(game_schemas_bp, url_prefix='/api/game-schemas')
 
 # Initialize the database
 db.init_app(app)

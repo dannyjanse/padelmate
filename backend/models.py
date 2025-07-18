@@ -102,13 +102,22 @@ class Match(db.Model):
     result = db.relationship('MatchResult', backref='match', uselist=False, lazy=True)
     
     def to_dict(self):
+        # Haal de user objecten op voor de namen
+        player1 = User.query.get(self.player1_id)
+        player2 = User.query.get(self.player2_id)
+        player3 = User.query.get(self.player3_id)
+        player4 = User.query.get(self.player4_id)
         return {
             'id': self.id,
             'match_night_id': self.match_night_id,
             'player1_id': self.player1_id,
+            'player1_name': player1.name if player1 else None,
             'player2_id': self.player2_id,
+            'player2_name': player2.name if player2 else None,
             'player3_id': self.player3_id,
+            'player3_name': player3.name if player3 else None,
             'player4_id': self.player4_id,
+            'player4_name': player4.name if player4 else None,
             'round': self.round,
             'court': self.court,
             'created_at': self.created_at.isoformat() if self.created_at else None,

@@ -30,9 +30,13 @@ export interface Match {
   id: number;
   match_night_id: number;
   player1_id: number;
+  player1_name?: string;
   player2_id: number;
+  player2_name?: string;
   player3_id: number;
+  player3_name?: string;
   player4_id: number;
+  player4_name?: string;
   round: number;
   court: number;
   created_at: string;

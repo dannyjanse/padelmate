@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { matchNightsAPI, authAPI } from '../services/api';
+import { matchNightsAPI, authAPI, gameSchemasAPI, matchesAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { MatchNight, Match, User, GameMode } from '../types';
 import { 
@@ -16,7 +16,10 @@ import {
   Edit,
   LogOut,
   Crown,
-  Target
+  Target,
+  Database,
+  Plus,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
@@ -35,6 +38,18 @@ const MatchNightDetails = () => {
   const [addingParticipant, setAddingParticipant] = useState(false);
   const [showGameModal, setShowGameModal] = useState(false);
   const [startingGame, setStartingGame] = useState(false);
+  const [gameStatus, setGameStatus] = useState<any>(null);
+  const [debugMatches, setDebugMatches] = useState<any>(null);
+  const [stoppingGame, setStoppingGame] = useState(false);
+  const [clearingMatches, setClearingMatches] = useState(false);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [submittingResult, setSubmittingResult] = useState(false);
+  const [resultData, setResultData] = useState({
+    team1_games: 0,
+    team2_games: 0,
+    winner_ids: [] as number[]
+  });
 
   // Game modes
   const gameModes: GameMode[] = [
@@ -56,8 +71,132 @@ const MatchNightDetails = () => {
     if (id) {
       fetchMatchNight();
       fetchAllUsers();
+      fetchGameStatus();
     }
   }, [id]);
+
+  const fetchGameStatus = async () => {
+    try {
+      const response = await gameSchemasAPI.getGameStatus(parseInt(id!));
+      setGameStatus(response.data);
+    } catch (err: any) {
+      console.error('Error fetching game status:', err);
+    }
+  };
+
+  const handleDebugMatches = async () => {
+    try {
+      const response = await matchNightsAPI.debugMatches(parseInt(id!));
+      setDebugMatches(response.data);
+      console.log('Debug matches:', response.data);
+    } catch (err: any) {
+      console.error('Error debugging matches:', err);
+    }
+  };
+
+  const handleStopGame = async () => {
+    try {
+      setStoppingGame(true);
+      await gameSchemasAPI.stopGame(parseInt(id!));
+      await fetchGameStatus(); // Refresh game status
+      await fetchMatchNight(); // Refresh match night data
+      setError(''); // Clear any previous errors
+      alert('Spel gestopt. Je kunt nu een nieuw spel starten.');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fout bij het stoppen van spel');
+    } finally {
+      setStoppingGame(false);
+    }
+  };
+
+  const handleClearMatches = async () => {
+    try {
+      setClearingMatches(true);
+      await matchNightsAPI.clearMatches(parseInt(id!));
+      await fetchGameStatus(); // Refresh game status
+      await fetchMatchNight(); // Refresh match night data
+      setError(''); // Clear any previous errors
+      alert('Alle wedstrijden en spelschema\'s zijn gewist. Je kunt nu een nieuw spel starten.');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fout bij het wissen van wedstrijden');
+    } finally {
+      setClearingMatches(false);
+    }
+  };
+
+  const handleAddResult = (match: Match) => {
+    setSelectedMatch(match);
+    
+    // Als er al een uitslag is, laad deze
+    if (match.result && match.result.score) {
+      const scoreParts = match.result.score.split('-');
+      const team1Games = parseInt(scoreParts[0]) || 0;
+      const team2Games = parseInt(scoreParts[1]) || 0;
+      setResultData({ 
+        team1_games: team1Games, 
+        team2_games: team2Games, 
+        winner_ids: match.result.winner_ids || [] 
+      });
+    } else {
+      setResultData({ team1_games: 0, team2_games: 0, winner_ids: [] });
+    }
+    
+    setShowResultModal(true);
+  };
+
+  const handleSubmitResult = async () => {
+    if (!selectedMatch || (resultData.team1_games === 0 && resultData.team2_games === 0)) {
+      setError('Vul de gewonnen games in voor beide teams');
+      return;
+    }
+
+    // Bepaal winnaars op basis van games
+    const winner_ids = [];
+    if (resultData.team1_games > resultData.team2_games) {
+      winner_ids.push(selectedMatch.player1_id, selectedMatch.player2_id);
+    } else if (resultData.team2_games > resultData.team1_games) {
+      winner_ids.push(selectedMatch.player3_id, selectedMatch.player4_id);
+    }
+
+    const score = `${resultData.team1_games}-${resultData.team2_games}`;
+
+    console.log('Submitting result:', {
+      match_id: selectedMatch.id,
+      score,
+      winner_ids,
+      team1_games: resultData.team1_games,
+      team2_games: resultData.team2_games
+    });
+
+    try {
+      setSubmittingResult(true);
+      const response = await matchesAPI.submitResult(selectedMatch.id, { 
+        score, 
+        winner_ids 
+      });
+      console.log('Result submitted successfully:', response.data);
+      setShowResultModal(false);
+      setSelectedMatch(null);
+      setResultData({ team1_games: 0, team2_games: 0, winner_ids: [] });
+      await fetchMatchNight(); // Refresh data
+      setError('');
+    } catch (err: any) {
+      console.error('Error submitting result:', err);
+      console.error('Error response:', err.response?.data);
+      setError(err.response?.data?.error || 'Fout bij het invoeren van uitslag');
+    } finally {
+      setSubmittingResult(false);
+    }
+  };
+
+  const handleWinnerToggle = (playerId: number) => {
+    setResultData(prev => ({
+      ...prev,
+      winner_ids: prev.winner_ids.includes(playerId)
+        ? prev.winner_ids.filter(id => id !== playerId)
+        : [...prev.winner_ids, playerId]
+    }));
+  };
 
   const fetchMatchNight = async () => {
     try {
@@ -136,12 +275,22 @@ const MatchNightDetails = () => {
   const handleStartGame = async (gameMode: string) => {
     try {
       setStartingGame(true);
-      // TODO: Implement API call to start game with selected mode
+      setError(''); // Clear any previous errors
+      
       console.log('Starting game with mode:', gameMode);
+      const response = await gameSchemasAPI.startGame(parseInt(id!), gameMode);
+      console.log('Game start response:', response.data);
+      
+      await fetchMatchNight(); // Refresh data
+      await fetchGameStatus(); // Refresh game status
       setShowGameModal(false);
-      // await matchNightsAPI.startGame(parseInt(id!), gameMode);
-      // await fetchMatchNight(); // Refresh data
+      
+      // Show success message with details
+      const modeName = gameMode === 'everyone_vs_everyone' ? 'Iedereen tegen iedereen' : 'King of the Court';
+      alert(`Spel gestart met modus: ${modeName}\nWedstrijden aangemaakt: ${response.data.matches_created}\nDeelnemers: ${response.data.participants_count}`);
+      
     } catch (err: any) {
+      console.error('Error starting game:', err);
       setError(err.response?.data?.error || 'Fout bij het starten van spel');
     } finally {
       setStartingGame(false);
@@ -273,7 +422,7 @@ const MatchNightDetails = () => {
       {/* Actions */}
       <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
         {/* Start Padelavond knop - alleen voor creator */}
-        {isCreator() && matchNight.participants_count >= 4 && (
+        {isCreator() && matchNight.participants_count >= 4 && !gameStatus?.game_active && (
           <button
             onClick={() => setShowGameModal(true)}
             disabled={startingGame}
@@ -283,6 +432,51 @@ const MatchNightDetails = () => {
             <span>{startingGame ? 'Starten...' : 'Start Padelavond'}</span>
           </button>
         )}
+
+        {/* Stop Game button - alleen voor creator */}
+        {isCreator() && gameStatus?.game_active && (
+          <button
+            onClick={handleStopGame}
+            disabled={stoppingGame}
+            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
+          >
+            <Play className="w-4 h-4" />
+            <span>{stoppingGame ? 'Stoppen...' : 'Stop Spel'}</span>
+          </button>
+        )}
+
+        {/* Force Stop button - altijd zichtbaar voor debugging */}
+        {isCreator() && (
+          <button
+            onClick={handleStopGame}
+            disabled={stoppingGame}
+            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
+          >
+            <Play className="w-4 h-4" />
+            <span>{stoppingGame ? 'Stoppen...' : 'Force Stop'}</span>
+          </button>
+        )}
+
+        {/* Clear Matches button - alleen voor creator */}
+        {isCreator() && (
+          <button
+            onClick={handleClearMatches}
+            disabled={clearingMatches}
+            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
+          >
+            <Database className="w-4 h-4" />
+            <span>{clearingMatches ? 'Wissen...' : 'Clear Matches'}</span>
+          </button>
+        )}
+
+        {/* Debug matches button */}
+        <button
+          onClick={handleDebugMatches}
+          className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
+        >
+          <Database className="w-4 h-4" />
+          <span>Debug Matches</span>
+        </button>
 
         {/* Afmeld knop - alleen voor deelnemers */}
         {isParticipating() && (
@@ -384,10 +578,57 @@ const MatchNightDetails = () => {
         )}
       </div>
 
-      {/* Matches */}
-      {matchNight.matches && matchNight.matches.length > 0 && (
+      {/* Game Status */}
+      {gameStatus && gameStatus.game_active && (
         <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Wedstrijden</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Actief Spel</h2>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center space-x-2 mb-2">
+              <Play className="w-5 h-5 text-green-600" />
+              <span className="font-medium text-green-800">
+                {gameStatus.game_schema.game_mode === 'everyone_vs_everyone' 
+                  ? 'Iedereen tegen iedereen' 
+                  : 'King of the Court'}
+              </span>
+            </div>
+            <p className="text-sm text-green-700">
+              Spel gestart op: {new Date(gameStatus.game_schema.created_at).toLocaleString('nl-NL')}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Matches */}
+      <div className="card">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Wedstrijden</h2>
+        
+        {/* Debug info */}
+        <div className="mb-4 p-3 bg-gray-100 rounded text-sm">
+          <p>Debug: {matchNight.matches ? matchNight.matches.length : 0} wedstrijden gevonden</p>
+          <p>Game Status: {gameStatus ? (gameStatus.game_active ? 'Actief' : 'Niet actief') : 'Onbekend'}</p>
+          {matchNight.matches && matchNight.matches.length > 0 && (
+            <p>Eerste wedstrijd: {JSON.stringify(matchNight.matches[0])}</p>
+          )}
+          {debugMatches && (
+            <div className="mt-2">
+              <p className="font-bold">Debug Matches Response:</p>
+              <p>Match Night ID: {debugMatches.match_night_id}</p>
+              <p>Matches Count: {debugMatches.matches_count}</p>
+              {debugMatches.matches && debugMatches.matches.length > 0 && (
+                <div>
+                  <p className="font-bold">Matches:</p>
+                  {debugMatches.matches.map((match: any, index: number) => (
+                    <div key={index} className="ml-2">
+                      <p>Match {index + 1}: {match.player1_name} & {match.player2_name} vs {match.player3_name} & {match.player4_name}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        
+        {matchNight.matches && matchNight.matches.length > 0 ? (
           <div className="space-y-4">
             {matchNight.matches.map((match: Match) => (
               <div key={match.id} className="border rounded-lg p-4">
@@ -395,24 +636,44 @@ const MatchNightDetails = () => {
                   <span className="text-sm font-medium text-gray-700">
                     Ronde {match.round} - Baan {match.court}
                   </span>
-                  {match.result && (
-                    <div className="flex items-center text-green-600">
-                      <Trophy className="w-4 h-4 mr-1" />
-                      <span className="text-sm">Voltooid</span>
-                    </div>
-                  )}
+                  <div className="flex items-center space-x-2">
+                    {match.result && (
+                      <div className="flex items-center space-x-2">
+                        <div className="flex items-center text-green-600">
+                          <Trophy className="w-4 h-4 mr-1" />
+                          <span className="text-sm">Voltooid</span>
+                        </div>
+                        <button
+                          onClick={() => handleAddResult(match)}
+                          className="btn-secondary flex items-center space-x-1 text-xs"
+                        >
+                          <Edit className="w-3 h-3" />
+                          <span>Bewerken</span>
+                        </button>
+                      </div>
+                    )}
+                    {!match.result && (
+                      <button
+                        onClick={() => handleAddResult(match)}
+                        className="btn-primary flex items-center space-x-1 text-xs"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Uitslag</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="font-medium text-gray-900">Team 1</p>
                     <p className="text-gray-600">
-                      {match.player1?.name} & {match.player2?.name}
+                      {match.player1_name || match.player1?.name || 'Onbekend'} & {match.player2_name || match.player2?.name || 'Onbekend'}
                     </p>
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">Team 2</p>
                     <p className="text-gray-600">
-                      {match.player3?.name} & {match.player4?.name}
+                      {match.player3_name || match.player3?.name || 'Onbekend'} & {match.player4_name || match.player4?.name || 'Onbekend'}
                     </p>
                   </div>
                 </div>
@@ -426,8 +687,18 @@ const MatchNightDetails = () => {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-center py-8">
+            <Play className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Geen wedstrijden</h3>
+            <p className="text-gray-500">
+              {gameStatus?.game_active 
+                ? 'Wedstrijden worden nog geladen...' 
+                : 'Start een spel om wedstrijden te genereren'}
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Game Modal */}
       {showGameModal && (
@@ -477,6 +748,121 @@ const MatchNightDetails = () => {
                   className="btn-secondary"
                 >
                   Annuleren
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Result Modal */}
+      {showResultModal && selectedMatch && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {selectedMatch?.result ? 'Uitslag Bewerken' : 'Uitslag Invoeren'}
+                </h2>
+                <button
+                  onClick={() => setShowResultModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Match Info */}
+                <div className="p-3 bg-gray-50 rounded">
+                  <p className="text-sm font-medium text-gray-900 mb-2">
+                    Ronde {selectedMatch.round} - Baan {selectedMatch.court}
+                  </p>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="font-medium text-gray-700">Team 1</p>
+                      <p className="text-gray-600">
+                        {selectedMatch.player1_name || selectedMatch.player1?.name || 'Onbekend'} & {selectedMatch.player2_name || selectedMatch.player2?.name || 'Onbekend'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-700">Team 2</p>
+                      <p className="text-gray-600">
+                        {selectedMatch.player3_name || selectedMatch.player3?.name || 'Onbekend'} & {selectedMatch.player4_name || selectedMatch.player4?.name || 'Onbekend'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Games Input */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="team1_games" className="block text-sm font-medium text-gray-700 mb-2">
+                      Team 1 Games
+                    </label>
+                    <input
+                      type="number"
+                      id="team1_games"
+                      min="0"
+                      max="10"
+                      value={resultData.team1_games}
+                      onChange={(e) => setResultData(prev => ({ 
+                        ...prev, 
+                        team1_games: parseInt(e.target.value) || 0 
+                      }))}
+                      className="input-field w-full"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="team2_games" className="block text-sm font-medium text-gray-700 mb-2">
+                      Team 2 Games
+                    </label>
+                    <input
+                      type="number"
+                      id="team2_games"
+                      min="0"
+                      max="10"
+                      value={resultData.team2_games}
+                      onChange={(e) => setResultData(prev => ({ 
+                        ...prev, 
+                        team2_games: parseInt(e.target.value) || 0 
+                      }))}
+                      className="input-field w-full"
+                    />
+                  </div>
+                </div>
+
+                {/* Score Preview */}
+                <div className="p-3 bg-blue-50 rounded">
+                  <p className="text-sm font-medium text-blue-900 mb-1">Score Preview:</p>
+                  <p className="text-lg font-bold text-blue-800">
+                    {resultData.team1_games} - {resultData.team2_games}
+                  </p>
+                  {resultData.team1_games > resultData.team2_games && (
+                    <p className="text-sm text-green-600 mt-1">Team 1 wint</p>
+                  )}
+                  {resultData.team2_games > resultData.team1_games && (
+                    <p className="text-sm text-green-600 mt-1">Team 2 wint</p>
+                  )}
+                  {resultData.team1_games === resultData.team2_games && resultData.team1_games > 0 && (
+                    <p className="text-sm text-orange-600 mt-1">Gelijkspel</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowResultModal(false)}
+                  className="btn-secondary"
+                >
+                  Annuleren
+                </button>
+                <button
+                  onClick={handleSubmitResult}
+                  disabled={submittingResult || (resultData.team1_games === 0 && resultData.team2_games === 0)}
+                  className="btn-primary"
+                >
+                  {submittingResult ? 'Opslaan...' : 'Opslaan'}
                 </button>
               </div>
             </div>

@@ -51,6 +51,9 @@ export const authAPI = {
   login: (data: LoginData) =>
     api.post<{ message: string; user: User }>('/api/auth/login', data),
   
+  quickLogin: (data: LoginData) =>
+    api.post<{ message: string; user: User }>('/api/auth/quick-login', data),
+  
   logout: () => api.post('/api/auth/logout'),
   
   getCurrentUser: () => api.get<{ user: User }>('/api/auth/me'),
@@ -70,6 +73,12 @@ export const authAPI = {
   getAllUsers: () => api.get<{ users: User[] }>('/api/auth/users'),
   
   addUsers: () => api.post('/api/auth/add-users'),
+  
+  reinitializeDatabase: () => api.post('/api/auth/reinit-db'),
+  
+  debugDatabase: () => api.get('/api/auth/debug-db'),
+  
+  fixSchema: () => api.post('/api/auth/fix-schema'),
 };
 
 // Match Nights API
@@ -98,6 +107,12 @@ export const matchNightsAPI = {
   
   removeParticipant: (matchNightId: number, userId: number) =>
     api.post(`/api/match-nights/${matchNightId}/remove-participant`, { user_id: userId }),
+  
+  debugMatches: (matchNightId: number) =>
+    api.get(`/api/match-nights/${matchNightId}/debug-matches`),
+  
+  clearMatches: (matchNightId: number) =>
+    api.post(`/api/match-nights/${matchNightId}/clear-matches`),
 };
 
 // Matches API
@@ -106,6 +121,18 @@ export const matchesAPI = {
     api.post(`/api/matches/${id}/result`, data),
   
   getResult: (id: number) => api.get<MatchResult>(`/api/matches/${id}/result`),
+};
+
+// Game Schemas API
+export const gameSchemasAPI = {
+  startGame: (matchNightId: number, gameMode: string) =>
+    api.post(`/api/game-schemas/${matchNightId}/start`, { game_mode: gameMode }),
+  
+  getGameStatus: (matchNightId: number) =>
+    api.get(`/api/game-schemas/${matchNightId}/status`),
+  
+  stopGame: (matchNightId: number) =>
+    api.post(`/api/game-schemas/${matchNightId}/stop`),
 };
 
 // Health check
