@@ -64,7 +64,7 @@ const MatchNightDetails = () => {
   const gameModes: GameMode[] = [
     {
       id: 'everyone_vs_everyone',
-      name: 'Iedereen tegen iedereen',
+              name: 'Iedereen met iedereen',
       description: 'Alle spelers spelen tegen elkaar in verschillende combinaties',
       icon: 'Target'
     },
@@ -485,7 +485,7 @@ const MatchNightDetails = () => {
               <div className="flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-2 rounded-lg">
                 <Play className="w-4 h-4" />
                 <span className="font-medium">
-                  Actief Spel '{gameStatus.game_schema.game_mode === 'everyone_vs_everyone' ? 'Iedereen vs Iedereen' : 'King of the Court'}'
+                  Actief Spel '{gameStatus.game_schema.game_mode === 'everyone_vs_everyone' ? 'Iedereen met iedereen' : 'King of the Court'}'
                 </span>
               </div>
             ) : (

@@ -64,25 +64,7 @@ const Dashboard = () => {
     }
   };
 
-  const handleDeleteCompleted = async (matchNightId: number, event: React.MouseEvent) => {
-    event.stopPropagation(); // Prevent navigation
-    
-    if (!confirm('Weet je zeker dat je deze afgeronde padelavond wilt verwijderen? Dit kan niet ongedaan worden gemaakt.')) {
-      return;
-    }
-    
-    try {
-      setDeletingMatchNight(matchNightId);
-      setError('');
-      await matchNightsAPI.deleteCompleted(matchNightId);
-      await fetchMatchNights(); // Refresh the list
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Fout bij het verwijderen van padelavond');
-      console.error('Error deleting completed match night:', err);
-    } finally {
-      setDeletingMatchNight(null);
-    }
-  };
+
 
   const handleDeleteForAll = async (matchNightId: number, event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent navigation
@@ -341,17 +323,7 @@ const Dashboard = () => {
                       </button>
                     )}
                     
-                    {/* Delete button - only for Danny and completed match nights */}
-                    {user?.id === 17 && matchNight.game_status === 'completed' && (
-                      <button
-                        onClick={(e) => handleDeleteCompleted(matchNight.id, e)}
-                        disabled={deletingMatchNight === matchNight.id}
-                        className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
-                        title="Verwijder afgeronde padelavond"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+
                     
                     {/* Delete button for creators - any status */}
                     {matchNight.creator_id === user?.id && (

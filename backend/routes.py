@@ -319,20 +319,6 @@ def delete_match_night(match_night_id):
         db.session.rollback()
         return jsonify({'error': 'Failed to delete match night'}), 500
 
-@match_nights_bp.route('/<int:match_night_id>/delete-completed', methods=['DELETE'])
-@login_required
-def delete_completed_match_night(match_night_id):
-    """Delete a completed match night (only Danny can do this)"""
-    match_night = MatchNight.query.get_or_404(match_night_id)
-    
-    # Check if user is Danny (user ID 17)
-    if current_user.id != 17:
-        return jsonify({'error': 'Only Danny can delete completed match nights'}), 403
-    
-    # Check if match night is completed
-    if match_night.game_status != 'completed':
-                return jsonify({'error': 'Can only delete completed match nights'}), 400
-
 @match_nights_bp.route('/<int:match_night_id>/delete', methods=['DELETE'])
 @login_required
 def delete_match_night_for_all(match_night_id):

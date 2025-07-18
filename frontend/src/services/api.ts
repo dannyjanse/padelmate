@@ -121,9 +121,6 @@ export const matchNightsAPI = {
   transferCreator: (matchNightId: number, newCreatorId: number) =>
     api.post(`/api/match-nights/${matchNightId}/transfer-creator`, { new_creator_id: newCreatorId }),
   
-  deleteCompleted: (matchNightId: number) =>
-    api.delete(`/api/match-nights/${matchNightId}/delete-completed`),
-  
   deleteForAll: (matchNightId: number) =>
     api.delete(`/api/match-nights/${matchNightId}/delete`),
 };
