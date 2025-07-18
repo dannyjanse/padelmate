@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { matchNightsAPI, authAPI } from '../services/api';
 import type { MatchNight } from '../types';
-import { Plus, Calendar, MapPin, Users, Play, Database } from 'lucide-react';
+import { Plus, Calendar, MapPin, Users, Play, Database, Trophy, CheckCircle, Wrench } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
 
@@ -13,6 +13,7 @@ const Dashboard = () => {
   const [matchNights, setMatchNights] = useState<MatchNight[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [fixingSchema, setFixingSchema] = useState(false);
 
 
   useEffect(() => {
@@ -29,6 +30,22 @@ const Dashboard = () => {
       console.error('Error fetching match nights:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFixSchema = async () => {
+    try {
+      setFixingSchema(true);
+      setError('');
+      const response = await authAPI.fixSchema();
+      console.log('Schema fix response:', response.data);
+      alert('Database schema succesvol bijgewerkt! Probeer de pagina te verversen.');
+      await fetchMatchNights(); // Refresh data
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fout bij het bijwerken van database schema');
+      console.error('Error fixing schema:', err);
+    } finally {
+      setFixingSchema(false);
     }
   };
 
@@ -51,6 +68,28 @@ const Dashboard = () => {
       return `${dateFormatted} om ${timeFormatted}`;
     } catch {
       return dateString;
+    }
+  };
+
+  const getGameStatusIcon = (gameStatus: string) => {
+    switch (gameStatus) {
+      case 'active':
+        return <Play className="w-4 h-4 text-green-600" />;
+      case 'completed':
+        return <Trophy className="w-4 h-4 text-yellow-600" />;
+      default:
+        return <Calendar className="w-4 h-4 text-gray-400" />;
+    }
+  };
+
+  const getGameStatusText = (gameStatus: string) => {
+    switch (gameStatus) {
+      case 'active':
+        return 'Spel actief';
+      case 'completed':
+        return 'Spel afgerond';
+      default:
+        return 'Nog niet gestart';
     }
   };
 
@@ -81,6 +120,18 @@ const Dashboard = () => {
             <Plus className="w-4 h-4" />
             <span>Nieuwe Padelavond</span>
           </button>
+          
+          {/* Debug knop - alleen zichtbaar als er een fout is */}
+          {error && (
+            <button
+              onClick={handleFixSchema}
+              disabled={fixingSchema}
+              className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
+            >
+              <Wrench className="w-4 h-4" />
+              <span>{fixingSchema ? 'Bezig...' : 'Fix Database'}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -125,6 +176,10 @@ const Dashboard = () => {
                     <div className="flex items-center text-gray-600 mb-2">
                       <MapPin className="w-4 h-4 mr-1" />
                       <span className="text-sm">{matchNight.location}</span>
+                    </div>
+                    <div className="flex items-center text-sm text-gray-500">
+                      {getGameStatusIcon(matchNight.game_status)}
+                      <span className="ml-1">{getGameStatusText(matchNight.game_status)}</span>
                     </div>
                   </div>
                 </div>

@@ -133,6 +133,9 @@ export const gameSchemasAPI = {
   
   stopGame: (matchNightId: number) =>
     api.post(`/api/game-schemas/${matchNightId}/stop`),
+  
+  completeGame: (matchNightId: number) =>
+    api.post(`/api/game-schemas/${matchNightId}/complete`),
 };
 
 // Health check

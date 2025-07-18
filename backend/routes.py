@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
-from models import User, MatchNight, Participation, Match, MatchResult, GameSchema
+from models import User, MatchNight, Participation, Match, MatchResult, GameSchema, PlayerStats
 from schedule_generator import create_matches_for_night
 from extensions import db
 from datetime import datetime
@@ -472,6 +472,10 @@ def submit_match_result(match_id):
         existing_result.set_winner_ids(data.get('winner_ids', []))
         try:
             db.session.commit()
+            
+            # Update player stats after updating result
+            update_player_stats_for_match(match_id)
+            
             print(f"Result updated successfully for match_id: {match_id}")
             return jsonify({'message': 'Result updated successfully', 'result': existing_result.to_dict()}), 200
         except Exception as e:
@@ -490,6 +494,10 @@ def submit_match_result(match_id):
     try:
         db.session.add(result)
         db.session.commit()
+        
+        # Update player stats after submitting result
+        update_player_stats_for_match(match_id)
+        
         print(f"Result submitted successfully for match_id: {match_id}")
         return jsonify({'message': 'Result submitted successfully', 'result': result.to_dict()}), 201
     except Exception as e:
@@ -1088,6 +1096,40 @@ def fix_database_schema():
                 except Exception as e:
                     print(f"Failed to add game_schema_id column: {str(e)}")
             
+            # Check match_nights table columns
+            match_nights_columns = connection.execute(db.text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'match_nights' AND table_schema = 'public'
+            """)).fetchall()
+            
+            match_nights_column_names = [col[0] for col in match_nights_columns]
+            print(f"Match_nights table columns: {match_nights_column_names}")
+            
+            # Add game_status column if it doesn't exist
+            if 'game_status' not in match_nights_column_names:
+                print("Adding game_status column to match_nights table...")
+                try:
+                    connection.execute(db.text("ALTER TABLE match_nights ADD COLUMN game_status VARCHAR(20) DEFAULT 'not_started'"))
+                    print("game_status column added successfully")
+                except Exception as e:
+                    print(f"Failed to add game_status column: {str(e)}")
+            
+            # Check if date column is DateTime type
+            column_types = connection.execute(db.text("""
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = 'match_nights' AND table_schema = 'public' AND column_name = 'date'
+            """)).fetchall()
+            
+            if column_types and column_types[0][1] == 'date':
+                print("Converting date column to timestamp...")
+                try:
+                    connection.execute(db.text("ALTER TABLE match_nights ALTER COLUMN date TYPE TIMESTAMP USING date::timestamp"))
+                    print("date column converted to timestamp successfully")
+                except Exception as e:
+                    print(f"Failed to convert date column: {str(e)}")
+            
             # Check if game_schemas table exists
             tables = connection.execute(db.text("""
                 SELECT table_name 
@@ -1108,6 +1150,26 @@ def fix_database_schema():
                 # Let SQLAlchemy recreate all tables
                 db.create_all()
                 print("All tables recreated successfully")
+            
+            # Create player_stats table if it doesn't exist
+            if 'player_stats' not in table_names:
+                print("Creating player_stats table...")
+                try:
+                    connection.execute(db.text("""
+                        CREATE TABLE player_stats (
+                            id SERIAL PRIMARY KEY,
+                            match_night_id INTEGER NOT NULL REFERENCES match_nights(id),
+                            user_id INTEGER NOT NULL REFERENCES users(id),
+                            games_won INTEGER DEFAULT 0,
+                            games_lost INTEGER DEFAULT 0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT unique_player_match_night_stats UNIQUE (match_night_id, user_id)
+                        )
+                    """))
+                    print("player_stats table created successfully")
+                except Exception as e:
+                    print(f"Failed to create player_stats table: {str(e)}")
             
             connection.commit()
             print("Database schema fixed successfully!")
@@ -1250,6 +1312,10 @@ def start_game(match_night_id):
             status='active'
         )
         db.session.add(game_schema)
+        
+        # Update match night game status
+        match_night.game_status = 'active'
+        
         db.session.commit()
         
         # Generate matches based on game mode
@@ -1330,6 +1396,43 @@ def stop_game(match_night_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to stop game: {str(e)}'}), 500
+
+@game_schemas_bp.route('/<int:match_night_id>/complete', methods=['POST'])
+@login_required
+def complete_game(match_night_id):
+    """Complete the game and finalize all results"""
+    match_night = MatchNight.query.get_or_404(match_night_id)
+    
+    # Check if user is the creator
+    if match_night.creator_id != current_user.id:
+        return jsonify({'error': 'Only the creator can complete the game'}), 403
+    
+    try:
+        # Get the active game schema
+        game_schema = GameSchema.query.filter_by(
+            match_night_id=match_night_id,
+            status='active'
+        ).first()
+        
+        if not game_schema:
+            return jsonify({'error': 'No active game found'}), 404
+        
+        # Update game schema status
+        game_schema.status = 'completed'
+        
+        # Update match night game status
+        match_night.game_status = 'completed'
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Game completed successfully',
+            'game_schema': game_schema.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to complete game: {str(e)}'}), 500
 
 def generate_everyone_vs_everyone_matches(match_night, game_schema):
     """Generate matches for everyone vs everyone mode using pair-based scheduling"""
@@ -1476,6 +1579,59 @@ def create_8_player_schedule(players):
         [(players[4], players[7]), (players[5], players[6])],  # 5&8 vs 6&7 (1,2,3,4 rest)
         [(players[4], players[6]), (players[5], players[7])]   # 5&7 vs 6&8 (1,2,3,4 rest)
     ]
+
+def update_player_stats_for_match(match_id):
+    """Update player stats for a specific match"""
+    match = Match.query.get(match_id)
+    if not match or not match.result:
+        return
+    
+    match_night_id = match.match_night_id
+    result = match.result
+    
+    # Parse the score to get games won by each team
+    try:
+        score_parts = result.score.split('-')
+        team1_games = int(score_parts[0])
+        team2_games = int(score_parts[1])
+    except (ValueError, IndexError):
+        return
+    
+    # Determine winners and losers
+    if team1_games > team2_games:
+        winners = [match.player1_id, match.player2_id]
+        losers = [match.player3_id, match.player4_id]
+    elif team2_games > team1_games:
+        winners = [match.player3_id, match.player4_id]
+        losers = [match.player1_id, match.player2_id]
+    else:
+        # Tie - no games won or lost
+        return
+    
+    # Update stats for all players
+    for player_id in [match.player1_id, match.player2_id, match.player3_id, match.player4_id]:
+        # Get or create player stats
+        player_stat = PlayerStats.query.filter_by(
+            match_night_id=match_night_id,
+            user_id=player_id
+        ).first()
+        
+        if not player_stat:
+            player_stat = PlayerStats(
+                match_night_id=match_night_id,
+                user_id=player_id,
+                games_won=0,
+                games_lost=0
+            )
+            db.session.add(player_stat)
+        
+        # Update games won/lost
+        if player_id in winners:
+            player_stat.games_won += 1
+        else:
+            player_stat.games_lost += 1
+    
+    db.session.commit()
 
 def generate_king_of_the_court_matches(match_night, game_schema):
     """Generate initial matches for king of the court mode"""

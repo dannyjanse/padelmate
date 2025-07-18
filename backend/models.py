@@ -45,6 +45,7 @@ class MatchNight(db.Model):
     location = db.Column(db.String(200), nullable=False)
     num_courts = db.Column(db.Integer, default=1)
     creator_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    game_status = db.Column(db.String(20), default='not_started')  # 'not_started', 'active', 'completed'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -60,8 +61,10 @@ class MatchNight(db.Model):
             'num_courts': self.num_courts,
             'creator_id': self.creator_id,
             'creator': self.creator.to_dict() if self.creator else None,
+            'game_status': self.game_status,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'participants_count': len(self.participations)
+            'participants_count': len(self.participations),
+            'player_stats': [stat.to_dict() for stat in self.player_stats] if self.player_stats else []
         }
 
 class Participation(db.Model):
@@ -180,4 +183,34 @@ class GameSchema(db.Model):
             'status': self.status,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'matches': [match.to_dict() for match in self.matches] if self.matches else []
+        }
+
+class PlayerStats(db.Model):
+    __tablename__ = 'player_stats'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    match_night_id = db.Column(db.Integer, db.ForeignKey('match_nights.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    games_won = db.Column(db.Integer, default=0)
+    games_lost = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    match_night = db.relationship('MatchNight', backref='player_stats', lazy=True)
+    user = db.relationship('User', backref='player_stats', lazy=True)
+    
+    # Ensure unique stats per player per match night
+    __table_args__ = (db.UniqueConstraint('match_night_id', 'user_id', name='unique_player_match_night_stats'),)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'match_night_id': self.match_night_id,
+            'user_id': self.user_id,
+            'user_name': self.user.name if self.user else None,
+            'games_won': self.games_won,
+            'games_lost': self.games_lost,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         } 

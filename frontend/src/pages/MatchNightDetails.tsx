@@ -19,7 +19,9 @@ import {
   Target,
   Database,
   Plus,
-  X
+  X,
+  CheckCircle,
+  Award
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
@@ -45,6 +47,7 @@ const MatchNightDetails = () => {
   const [showResultModal, setShowResultModal] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [submittingResult, setSubmittingResult] = useState(false);
+  const [completingGame, setCompletingGame] = useState(false);
   const [resultData, setResultData] = useState({
     team1_games: 0,
     team2_games: 0,
@@ -113,6 +116,21 @@ const MatchNightDetails = () => {
       setError(err.response?.data?.error || 'Fout bij het wissen van wedstrijden');
     } finally {
       setClearingMatches(false);
+    }
+  };
+
+  const handleCompleteGame = async () => {
+    try {
+      setCompletingGame(true);
+      await gameSchemasAPI.completeGame(parseInt(id!));
+      await fetchGameStatus(); // Refresh game status
+      await fetchMatchNight(); // Refresh match night data
+      setError(''); // Clear any previous errors
+      alert('Spel succesvol afgerond! Alle uitslagen staan nu vast.');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fout bij het afronden van het spel');
+    } finally {
+      setCompletingGame(false);
     }
   };
 
@@ -322,6 +340,29 @@ const MatchNightDetails = () => {
     }
   };
 
+  const getGameStatusText = (gameStatus: string) => {
+    switch (gameStatus) {
+      case 'active':
+        return 'Spel actief';
+      case 'completed':
+        return 'Spel afgerond';
+      default:
+        return 'Nog niet gestart';
+    }
+  };
+
+  const getSortedPlayerStats = () => {
+    if (!matchNight?.player_stats) return [];
+    
+    return [...matchNight.player_stats].sort((a, b) => {
+      // Sort by games won (descending), then by games lost (ascending)
+      if (a.games_won !== b.games_won) {
+        return b.games_won - a.games_won;
+      }
+      return a.games_lost - b.games_lost;
+    });
+  };
+
   const isParticipating = () => {
     if (!matchNight?.participants || !currentUser) return false;
     return matchNight.participants.some(p => p.id === currentUser.id);
@@ -336,6 +377,10 @@ const MatchNightDetails = () => {
     if (!matchNight?.participants) return false;
     const participantCount = matchNight.participants.length;
     return participantCount >= 4 && participantCount % 4 === 0;
+  };
+
+  const isGameCompleted = () => {
+    return matchNight?.game_status === 'completed';
   };
 
   // Filter out users who are already participating
@@ -383,8 +428,8 @@ const MatchNightDetails = () => {
           </div>
         </div>
         
-        {/* Alleen creator kan bewerken */}
-        {isCreator() && (
+        {/* Alleen creator kan bewerken - niet voor afgeronde spellen */}
+        {isCreator() && !isGameCompleted() && (
           <button
             onClick={() => navigate(`/match-nights/${id}/edit`)}
             className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
@@ -392,6 +437,14 @@ const MatchNightDetails = () => {
             <Edit className="w-4 h-4" />
             <span>Bewerken</span>
           </button>
+        )}
+        
+        {/* Toon afgerond badge voor afgeronde spellen */}
+        {isGameCompleted() && (
+          <div className="flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-2 rounded-lg">
+            <Trophy className="w-4 h-4" />
+            <span className="font-medium">Spel Afgerond</span>
+          </div>
         )}
       </div>
 
@@ -452,61 +505,112 @@ const MatchNightDetails = () => {
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-        {/* Start Padelavond knop - alleen voor creator */}
-        {isCreator() && matchNight.participants_count >= 4 && !gameStatus?.game_active && (
-          <button
-            onClick={() => setShowGameModal(true)}
-            disabled={startingGame}
-            className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
-          >
-            <Play className="w-4 h-4" />
-            <span>{startingGame ? 'Starten...' : 'Start Padelavond'}</span>
-          </button>
-        )}
+      {/* Actions - alleen tonen als spel niet is afgerond */}
+      {!isGameCompleted() && (
+        <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+          {/* Start Padelavond knop - alleen voor creator */}
+          {isCreator() && matchNight.participants_count >= 4 && !gameStatus?.game_active && (
+            <button
+              onClick={() => setShowGameModal(true)}
+              disabled={startingGame}
+              className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
+            >
+              <Play className="w-4 h-4" />
+              <span>{startingGame ? 'Starten...' : 'Start Padelavond'}</span>
+            </button>
+          )}
 
-        {/* Nieuw Spel Starten button - alleen voor creator */}
-        {isCreator() && gameStatus?.game_active && (
-          <button
-            onClick={() => setShowGameModal(true)}
-            disabled={startingGame}
-            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
-          >
-            <Play className="w-4 h-4" />
-            <span>{startingGame ? 'Starten...' : 'Nieuw Spel Starten'}</span>
-          </button>
-        )}
+          {/* Nieuw Spel Starten button - alleen voor creator */}
+          {isCreator() && gameStatus?.game_active && (
+            <button
+              onClick={() => setShowGameModal(true)}
+              disabled={startingGame}
+              className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
+            >
+              <Play className="w-4 h-4" />
+              <span>{startingGame ? 'Starten...' : 'Nieuw Spel Starten'}</span>
+            </button>
+          )}
 
+          {/* Spel afronden button - alleen voor creator tijdens actief spel */}
+          {isCreator() && gameStatus?.game_active && (
+            <button
+              onClick={handleCompleteGame}
+              disabled={completingGame}
+              className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
+            >
+              <CheckCircle className="w-4 h-4" />
+              <span>{completingGame ? 'Afronden...' : 'Spel Afronden'}</span>
+            </button>
+          )}
 
+          {/* Afmeld knop - alleen voor deelnemers, niet tijdens actief spel */}
+          {isParticipating() && !gameStatus?.game_active && (
+            <button
+              onClick={handleLeave}
+              disabled={joining}
+              className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>{joining ? 'Afmelden...' : 'Afmelden'}</span>
+            </button>
+          )}
 
-        {/* Afmeld knop - alleen voor deelnemers, niet tijdens actief spel */}
-        {isParticipating() && !gameStatus?.game_active && (
-          <button
-            onClick={handleLeave}
-            disabled={joining}
-            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>{joining ? 'Afmelden...' : 'Afmelden'}</span>
-          </button>
-        )}
+          {/* Schema genereren - alleen voor creator */}
+          {isCreator() && canGenerateSchedule() && !matchNight.matches?.length && (
+            <button
+              onClick={handleGenerateSchedule}
+              disabled={generatingSchedule}
+              className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
+            >
+              <Clock className="w-4 h-4" />
+              <span>{generatingSchedule ? 'Genereren...' : 'Schema Genereren'}</span>
+            </button>
+          )}
+        </div>
+      )}
 
-        {/* Schema genereren - alleen voor creator */}
-        {isCreator() && canGenerateSchedule() && !matchNight.matches?.length && (
-          <button
-            onClick={handleGenerateSchedule}
-            disabled={generatingSchedule}
-            className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
-          >
-            <Clock className="w-4 h-4" />
-            <span>{generatingSchedule ? 'Genereren...' : 'Schema Genereren'}</span>
-          </button>
-        )}
-      </div>
+      {/* Player Stats Section - alleen tijdens actief of afgerond spel */}
+      {(gameStatus?.game_active || matchNight?.game_status === 'completed') && (
+        <div className="card">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+            <Award className="w-5 h-5 mr-2" />
+            Spelstanden
+          </h2>
+          {getSortedPlayerStats().length > 0 ? (
+            <div className="space-y-3">
+              {getSortedPlayerStats().map((stat, index) => (
+                <div key={stat.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center justify-center w-8 h-8 bg-primary-100 text-primary-600 rounded-full font-semibold">
+                      {index + 1}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{stat.user_name}</p>
+                      <p className="text-sm text-gray-500">
+                        {stat.games_won} gewonnen • {stat.games_lost} verloren
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-primary-600">
+                      {stat.games_won}
+                    </p>
+                    <p className="text-xs text-gray-500">gewonnen</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-4">
+              Nog geen uitslagen ingevoerd
+            </p>
+          )}
+        </div>
+      )}
 
-      {/* Add Participant Section - alleen voor creator, niet tijdens actief spel */}
-      {isCreator() && !gameStatus?.game_active && (
+      {/* Add Participant Section - alleen voor creator, niet tijdens actief spel of afgeronde spellen */}
+      {isCreator() && !gameStatus?.game_active && !isGameCompleted() && (
         <div className="card">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Deelnemer Toevoegen</h2>
           <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
@@ -544,8 +648,8 @@ const MatchNightDetails = () => {
         </div>
       )}
 
-      {/* Participants - alleen zichtbaar als er geen actief spel is */}
-      {!gameStatus?.game_active && (
+      {/* Participants - alleen zichtbaar als er geen actief spel is en niet afgerond */}
+      {!gameStatus?.game_active && !isGameCompleted() && (
         <div className="card">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Deelnemers</h2>
           {matchNight.participants && matchNight.participants.length > 0 ? (
@@ -563,8 +667,8 @@ const MatchNightDetails = () => {
                       <p className="text-sm text-gray-500">{participant.email}</p>
                     </div>
                   </div>
-                  {/* Alleen creator kan deelnemers verwijderen */}
-                  {isCreator() && (
+                  {/* Alleen creator kan deelnemers verwijderen - niet voor afgeronde spellen */}
+                  {isCreator() && !isGameCompleted() && (
                     <button
                       onClick={() => handleRemoveParticipant(participant.id)}
                       className="text-red-600 hover:text-red-800 p-1"
@@ -610,8 +714,8 @@ const MatchNightDetails = () => {
                           <Trophy className="w-4 h-4 mr-1" />
                           <span className="text-sm">Voltooid</span>
                         </div>
-                        {/* Alleen creator kan bewerken */}
-                        {isCreator() && (
+                        {/* Alleen creator kan bewerken - niet voor afgeronde spellen */}
+                        {isCreator() && !isGameCompleted() && (
                           <button
                             onClick={() => handleAddResult(match)}
                             className="btn-secondary flex items-center space-x-1 text-xs"
@@ -622,7 +726,7 @@ const MatchNightDetails = () => {
                         )}
                       </div>
                     )}
-                    {!match.result && isCreator() && (
+                    {!match.result && isCreator() && !isGameCompleted() && (
                       <button
                         onClick={() => handleAddResult(match)}
                         className="btn-primary flex items-center space-x-1 text-xs"

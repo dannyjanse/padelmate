@@ -12,10 +12,23 @@ export interface MatchNight {
   num_courts: number;
   creator_id: number;
   creator?: User;
+  game_status: string;
   created_at: string;
   participants_count: number;
   participants?: User[];
   matches?: Match[];
+  player_stats?: PlayerStats[];
+}
+
+export interface PlayerStats {
+  id: number;
+  match_night_id: number;
+  user_id: number;
+  user_name?: string;
+  games_won: number;
+  games_lost: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Participation {
