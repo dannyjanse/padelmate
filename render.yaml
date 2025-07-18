@@ -4,7 +4,7 @@ services:
     name: padelmate-backend
     env: python
     plan: free
-    buildCommand: cd backend && pip install -r requirements.txt && echo "Backend build completed"
+    buildCommand: pwd && ls -la && cd backend && ls -la && pip install -r requirements.txt && echo "Backend build completed successfully"
     startCommand: cd backend && gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: PYTHON_VERSION
