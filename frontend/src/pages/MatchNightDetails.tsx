@@ -238,6 +238,11 @@ const MatchNightDetails = () => {
         await fetchMatchNight();
         setShowResultModal(false);
         setError('');
+        
+        // Check if a new match was generated (King of the Court)
+        if (response.data.next_match) {
+          console.log('New King of the Court match generated:', response.data.next_match);
+        }
       } catch (err: any) {
         setError(err.response?.data?.error || 'Fout bij het opslaan van uitslag');
       } finally {
@@ -586,7 +591,7 @@ const MatchNightDetails = () => {
                     <div>
                       <p className="font-medium text-gray-900">{stat.user_name}</p>
                       <p className="text-sm text-gray-500">
-                        Totaal punten gescoord
+                        {gameStatus?.game_schema?.game_mode === 'king_of_the_court' ? 'Gewonnen wedstrijden' : 'Totaal punten gescoord'}
                       </p>
                     </div>
                   </div>
@@ -594,7 +599,9 @@ const MatchNightDetails = () => {
                     <p className="text-lg font-bold text-primary-600">
                       {stat.total_points}
                     </p>
-                    <p className="text-xs text-gray-500">punten</p>
+                    <p className="text-xs text-gray-500">
+                      {gameStatus?.game_schema?.game_mode === 'king_of_the_court' ? 'wedstrijden' : 'punten'}
+                    </p>
                   </div>
                 </div>
               ))}

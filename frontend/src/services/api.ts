@@ -123,6 +123,9 @@ export const matchNightsAPI = {
   
   deleteCompleted: (matchNightId: number) =>
     api.delete(`/api/match-nights/${matchNightId}/delete-completed`),
+  
+  deleteForAll: (matchNightId: number) =>
+    api.delete(`/api/match-nights/${matchNightId}/delete`),
 };
 
 // Matches API

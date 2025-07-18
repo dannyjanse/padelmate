@@ -84,6 +84,26 @@ const Dashboard = () => {
     }
   };
 
+  const handleDeleteForAll = async (matchNightId: number, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent navigation
+    
+    if (!confirm('Weet je zeker dat je deze padelavond wilt verwijderen? Dit kan niet ongedaan worden gemaakt.')) {
+      return;
+    }
+    
+    try {
+      setDeletingMatchNight(matchNightId);
+      setError('');
+      await matchNightsAPI.deleteForAll(matchNightId);
+      await fetchMatchNights(); // Refresh the list
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fout bij het verwijderen van padelavond');
+      console.error('Error deleting match night:', err);
+    } finally {
+      setDeletingMatchNight(null);
+    }
+  };
+
   const handleLeaveMatchNight = async (matchNight: MatchNight, event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent navigation
     
@@ -328,6 +348,18 @@ const Dashboard = () => {
                         disabled={deletingMatchNight === matchNight.id}
                         className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
                         title="Verwijder afgeronde padelavond"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    
+                    {/* Delete button for creators - any status */}
+                    {matchNight.creator_id === user?.id && (
+                      <button
+                        onClick={(e) => handleDeleteForAll(matchNight.id, e)}
+                        disabled={deletingMatchNight === matchNight.id}
+                        className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+                        title="Verwijder padelavond"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

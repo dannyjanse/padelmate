@@ -331,8 +331,54 @@ def delete_completed_match_night(match_night_id):
     
     # Check if match night is completed
     if match_night.game_status != 'completed':
-        return jsonify({'error': 'Can only delete completed match nights'}), 400
+                return jsonify({'error': 'Can only delete completed match nights'}), 400
+
+@match_nights_bp.route('/<int:match_night_id>/delete', methods=['DELETE'])
+@login_required
+def delete_match_night_for_all(match_night_id):
+    """Delete a match night (any status) - available for creators only"""
+    match_night = MatchNight.query.get_or_404(match_night_id)
     
+    # Check if user is the creator
+    if match_night.creator_id != current_user.id:
+        return jsonify({'error': 'Only the creator can delete this match night'}), 403
+    
+    try:
+        # Get all matches for this match night
+        matches = Match.query.filter_by(match_night_id=match_night_id).all()
+        match_ids = [match.id for match in matches]
+        
+        # Delete all related data in the correct order
+        # 1. Delete match results first (foreign key constraint)
+        if match_ids:
+            MatchResult.query.filter(MatchResult.match_id.in_(match_ids)).delete()
+        
+        # 2. Delete player stats
+        PlayerStats.query.filter_by(match_night_id=match_night_id).delete()
+        
+        # 3. Delete matches
+        Match.query.filter_by(match_night_id=match_night_id).delete()
+        
+        # 4. Delete game schemas
+        GameSchema.query.filter_by(match_night_id=match_night_id).delete()
+        
+        # 5. Delete participations
+        Participation.query.filter_by(match_night_id=match_night_id).delete()
+        
+        # 6. Finally delete the match night itself
+        db.session.delete(match_night)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Match night at {match_night.location} on {match_night.date.strftime("%d-%m-%Y")} deleted successfully',
+            'deleted_match_night_id': match_night_id
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to delete match night: {str(e)}'}), 500
+
     try:
         # Get all matches for this match night
         matches = Match.query.filter_by(match_night_id=match_night_id).all()
@@ -593,7 +639,22 @@ def submit_match_result(match_id):
         # Update player stats after submitting result
         update_player_stats_for_match(match_id)
         
-        return jsonify({'message': 'Result submitted successfully', 'result': result.to_dict()}), 201
+        # Check if this is King of the Court and generate next match
+        next_match = None
+        if match.game_schema_id:
+            game_schema = GameSchema.query.get(match.game_schema_id)
+            if game_schema and game_schema.game_mode == 'king_of_the_court':
+                next_match = generate_next_king_of_the_court_match(match)
+        
+        response_data = {
+            'message': 'Result submitted successfully', 
+            'result': result.to_dict()
+        }
+        
+        if next_match:
+            response_data['next_match'] = next_match.to_dict()
+        
+        return jsonify(response_data), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to submit result: {str(e)}'}), 500
@@ -1813,6 +1874,18 @@ def update_player_stats_for_match(match_id):
     except (ValueError, IndexError):
         return
     
+    # Get match night to determine game mode
+    match_night = MatchNight.query.get(match_night_id)
+    if not match_night:
+        return
+    
+    # Determine game mode and scoring logic
+    is_king_of_the_court = False
+    if match.game_schema_id:
+        game_schema = GameSchema.query.get(match.game_schema_id)
+        if game_schema and game_schema.game_mode == 'king_of_the_court':
+            is_king_of_the_court = True
+    
     # Calculate point difference (saldo) for each team
     team1_point_difference = team1_games - team2_games
     team2_point_difference = team2_games - team1_games
@@ -1873,22 +1946,36 @@ def update_player_stats_for_match(match_id):
             )
             db.session.add(player_stat)
         
-        # For naai-partijen, only add points if the player is in the pair that hasn't played together
-        if is_naai_partij:
-            if player_id in naai_partij_players:
-                # Add point difference based on which team the player was on
+        # Determine points based on game mode
+        if is_king_of_the_court:
+            # King of the Court: 1 point for winning, 0 for losing
+            if team1_games > team2_games:
+                # Team 1 wins
                 if player_id in [match.player1_id, match.player2_id]:
+                    player_stat.total_points += 1
+            elif team2_games > team1_games:
+                # Team 2 wins
+                if player_id in [match.player3_id, match.player4_id]:
+                    player_stat.total_points += 1
+            # No points for losing team
+        else:
+            # Iedereen vs Iedereen: Use point difference (saldo)
+            # For naai-partijen, only add points if the player is in the pair that hasn't played together
+            if is_naai_partij:
+                if player_id in naai_partij_players:
+                    # Add point difference based on which team the player was on
+                    if player_id in [match.player1_id, match.player2_id]:
+                        player_stat.total_points += team1_point_difference
+                    else:
+                        player_stat.total_points += team2_point_difference
+            else:
+                # Normal match - add point difference for all players
+                if player_id in [match.player1_id, match.player2_id]:
+                    # Player was on team 1
                     player_stat.total_points += team1_point_difference
                 else:
+                    # Player was on team 2
                     player_stat.total_points += team2_point_difference
-        else:
-            # Normal match - add point difference for all players
-            if player_id in [match.player1_id, match.player2_id]:
-                # Player was on team 1
-                player_stat.total_points += team1_point_difference
-            else:
-                # Player was on team 2
-                player_stat.total_points += team2_point_difference
     
     db.session.commit()
 
@@ -1916,7 +2003,66 @@ def generate_king_of_the_court_matches(match_night, game_schema):
         db.session.add(match)
     
     db.session.commit()
-    return matches 
+    return matches
+
+def generate_next_king_of_the_court_match(completed_match):
+    """Generate the next match for King of the Court after a match is completed"""
+    try:
+        # Get the match result to determine winners
+        result = completed_match.result
+        if not result or not result.score:
+            return None
+        
+        # Parse the score to determine winners
+        score_parts = result.score.split('-')
+        team1_games = int(score_parts[0])
+        team2_games = int(score_parts[1])
+        
+        # Determine winners and losers
+        if team1_games > team2_games:
+            # Team 1 wins (player1 and player2)
+            winners = [completed_match.player1_id, completed_match.player2_id]
+            losers = [completed_match.player3_id, completed_match.player4_id]
+        elif team2_games > team1_games:
+            # Team 2 wins (player3 and player4)
+            winners = [completed_match.player3_id, completed_match.player4_id]
+            losers = [completed_match.player1_id, completed_match.player2_id]
+        else:
+            # Tie - no next match
+            return None
+        
+        # Get all participants for this match night
+        participants = Participation.query.filter_by(match_night_id=completed_match.match_night_id).all()
+        all_participant_ids = [p.user_id for p in participants]
+        
+        # Create queue: winners stay, losers go to end of queue
+        queue = winners + [p for p in all_participant_ids if p not in winners and p not in losers] + losers
+        
+        # Get the next 4 players from the queue
+        if len(queue) >= 4:
+            # Split winners (they stay but play against each other)
+            next_match = Match(
+                match_night_id=completed_match.match_night_id,
+                game_schema_id=completed_match.game_schema_id,
+                player1_id=queue[0],  # First winner
+                player2_id=queue[2],  # First player from queue
+                player3_id=queue[1],  # Second winner
+                player4_id=queue[3],  # Second player from queue
+                round=completed_match.round + 1,
+                court=completed_match.court
+            )
+            
+            db.session.add(next_match)
+            db.session.commit()
+            
+            return next_match
+        
+        return None
+        
+    except Exception as e:
+        print(f"Error generating next King of the Court match: {str(e)}")
+        db.session.rollback()
+        return None 
 
 def recalculate_all_player_stats(match_night_id):
     """Recalculate all player stats for a match night from existing match results"""
