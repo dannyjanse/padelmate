@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { matchNightsAPI, authAPI } from '../services/api';
 import type { MatchNight, User } from '../types';
-import { Plus, Calendar, MapPin, Users, Play, Database, Trophy, CheckCircle, Wrench, Trash2, X, UserPlus } from 'lucide-react';
+import { Plus, Calendar, MapPin, Users, Play, Trophy, Wrench, Trash2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
 
@@ -53,7 +53,7 @@ const Dashboard = () => {
     try {
       setFixingSchema(true);
       setError('');
-      const response = await authAPI.fixSchema();
+      await authAPI.fixSchema();
       alert('Database schema succesvol bijgewerkt! Probeer de pagina te verversen.');
       await fetchMatchNights(); // Refresh data
     } catch (err: any) {
@@ -139,14 +139,7 @@ const Dashboard = () => {
   };
 
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return format(date, 'EEEE d MMMM yyyy', { locale: nl });
-    } catch {
-      return dateString;
-    }
-  };
+
 
   const formatDateTime = (dateString: string) => {
     try {

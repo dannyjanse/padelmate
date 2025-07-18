@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, Plus } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 const Layout = () => {
   const { user, logout } = useAuth();

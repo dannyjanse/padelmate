@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   MapPin,
   Users,
-  Calendar,
   Play,
   Edit,
   Plus,
@@ -19,10 +18,8 @@ import {
   Trophy,
   UserPlus,
   UserMinus,
-  LogOut,
   Crown,
-  Target,
-  Database
+  Target
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
@@ -36,16 +33,12 @@ const MatchNightDetails = () => {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [joining, setJoining] = useState(false);
-
   const [addingParticipant, setAddingParticipant] = useState(false);
   const [showGameModal, setShowGameModal] = useState(false);
   const [startingGame, setStartingGame] = useState(false);
   const [gameStatus, setGameStatus] = useState<any>(null);
   const [loadingGameStatus, setLoadingGameStatus] = useState(true);
-  const [debugMatches, setDebugMatches] = useState<any>(null);
-  const [stoppingGame, setStoppingGame] = useState(false);
-  const [clearingMatches, setClearingMatches] = useState(false);
+
   const [showResultModal, setShowResultModal] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [submittingResult, setSubmittingResult] = useState(false);
@@ -105,33 +98,7 @@ const MatchNightDetails = () => {
 
 
 
-  const handleStopGame = async () => {
-    try {
-      setStoppingGame(true);
-      await gameSchemasAPI.stopGame(parseInt(id!));
-      await fetchGameStatus(); // Refresh game status
-      await fetchMatchNight(); // Refresh match night data
-      setError(''); // Clear any previous errors
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Fout bij het stoppen van spel');
-    } finally {
-      setStoppingGame(false);
-    }
-  };
 
-  const handleClearMatches = async () => {
-    try {
-      setClearingMatches(true);
-      await matchNightsAPI.clearMatches(parseInt(id!));
-      await fetchGameStatus(); // Refresh game status
-      await fetchMatchNight(); // Refresh match night data
-      setError(''); // Clear any previous errors
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Fout bij het wissen van wedstrijden');
-    } finally {
-      setClearingMatches(false);
-    }
-  };
 
   const handleCompleteGame = async () => {
     if (!matchNight) return;
@@ -250,14 +217,7 @@ const MatchNightDetails = () => {
       }
   };
 
-  const handleWinnerToggle = (playerId: number) => {
-    setResultData(prev => ({
-      ...prev,
-      winner_ids: prev.winner_ids.includes(playerId)
-        ? prev.winner_ids.filter(id => id !== playerId)
-        : [...prev.winner_ids, playerId]
-    }));
-  };
+
 
   const fetchMatchNight = async () => {
     try {
@@ -283,13 +243,10 @@ const MatchNightDetails = () => {
 
   const handleLeave = async () => {
     try {
-      setJoining(true);
       await matchNightsAPI.leave(parseInt(id!));
       await fetchMatchNight(); // Refresh data
     } catch (err: any) {
       setError(err.response?.data?.error || 'Fout bij het verlaten');
-    } finally {
-      setJoining(false);
     }
   };
 
@@ -342,15 +299,6 @@ const MatchNightDetails = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return format(date, 'EEEE d MMMM yyyy', { locale: nl });
-    } catch {
-      return dateString;
-    }
-  };
-
   const formatDateTime = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -362,17 +310,6 @@ const MatchNightDetails = () => {
     }
   };
 
-  const getGameStatusText = (gameStatus: string) => {
-    switch (gameStatus) {
-      case 'active':
-        return 'Spel actief';
-      case 'completed':
-        return 'Spel afgerond';
-      default:
-        return 'Nog niet gestart';
-    }
-  };
-
   const getSortedPlayerStats = () => {
     if (!matchNight?.player_stats) return [];
     
@@ -380,11 +317,6 @@ const MatchNightDetails = () => {
       // Sort by total points (descending)
       return b.total_points - a.total_points;
     });
-  };
-
-  const isParticipating = () => {
-    if (!matchNight?.participants || !currentUser) return false;
-    return matchNight.participants.some(p => p.id === currentUser.id);
   };
 
   const isCreator = () => {

@@ -2,7 +2,6 @@ import axios from 'axios';
 import type { 
   User, 
   MatchNight, 
-  Match, 
   MatchResult,
   CreateMatchNightData,
   SubmitMatchResultData,
