@@ -19,6 +19,21 @@ const api = axios.create({
   },
 });
 
+// Request interceptor om authentication header toe te voegen
+api.interceptors.request.use(
+  (config) => {
+    const user = localStorage.getItem('user');
+    if (user) {
+      const userData = JSON.parse(user);
+      config.headers['Authorization'] = `Bearer ${userData.id}`; // Of een andere auth token
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
