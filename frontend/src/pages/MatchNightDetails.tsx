@@ -61,18 +61,6 @@ const MatchNightDetails = () => {
     }
   };
 
-  const handleJoin = async () => {
-    try {
-      setJoining(true);
-      await matchNightsAPI.join(parseInt(id!));
-      await fetchMatchNight(); // Refresh data
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Fout bij het deelnemen');
-    } finally {
-      setJoining(false);
-    }
-  };
-
   const handleLeave = async () => {
     try {
       setJoining(true);
@@ -175,22 +163,22 @@ const MatchNightDetails = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0">
         <div className="flex items-center space-x-4">
           <button
             onClick={() => navigate(-1)}
             className="flex items-center text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Terug
+            <span className="hidden sm:inline">Terug</span>
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               {formatDate(matchNight.date)}
             </h1>
             <div className="flex items-center text-gray-600 mt-1">
               <MapPin className="w-4 h-4 mr-1" />
-              {matchNight.location}
+              <span className="text-sm sm:text-base">{matchNight.location}</span>
             </div>
           </div>
         </div>
@@ -199,7 +187,7 @@ const MatchNightDetails = () => {
         {isCreator() && (
           <button
             onClick={() => navigate(`/match-nights/${id}/edit`)}
-            className="btn-secondary flex items-center space-x-2"
+            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
           >
             <Edit className="w-4 h-4" />
             <span>Bewerken</span>
@@ -248,13 +236,13 @@ const MatchNightDetails = () => {
       </div>
 
       {/* Actions */}
-      <div className="flex space-x-4">
+      <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
         {/* Afmeld knop - alleen voor deelnemers */}
         {isParticipating() && (
           <button
             onClick={handleLeave}
             disabled={joining}
-            className="btn-secondary flex items-center space-x-2"
+            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
           >
             <LogOut className="w-4 h-4" />
             <span>{joining ? 'Afmelden...' : 'Afmelden'}</span>
@@ -266,7 +254,7 @@ const MatchNightDetails = () => {
           <button
             onClick={handleGenerateSchedule}
             disabled={generatingSchedule}
-            className="btn-primary flex items-center space-x-2"
+            className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
           >
             <Clock className="w-4 h-4" />
             <span>{generatingSchedule ? 'Genereren...' : 'Schema Genereren'}</span>
@@ -278,7 +266,7 @@ const MatchNightDetails = () => {
       {isCreator() && (
         <div className="card">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Deelnemer Toevoegen</h2>
-          <div className="flex space-x-4 items-end">
+          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
             <div className="flex-1">
               <label htmlFor="user-select" className="block text-sm font-medium text-gray-700 mb-2">
                 Selecteer Gebruiker
@@ -287,7 +275,7 @@ const MatchNightDetails = () => {
                 id="user-select"
                 value={selectedUserId}
                 onChange={(e) => setSelectedUserId(e.target.value)}
-                className="input-field"
+                className="input-field w-full"
                 disabled={availableUsers.length === 0}
               >
                 <option value="">Kies een gebruiker...</option>
@@ -301,7 +289,7 @@ const MatchNightDetails = () => {
             <button
               onClick={handleAddParticipant}
               disabled={!selectedUserId || addingParticipant || availableUsers.length === 0}
-              className="btn-primary flex items-center space-x-2"
+              className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
             >
               <UserPlus className="w-4 h-4" />
               <span>{addingParticipant ? 'Toevoegen...' : 'Toevoegen'}</span>
@@ -367,7 +355,7 @@ const MatchNightDetails = () => {
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="font-medium text-gray-900">Team 1</p>
                     <p className="text-gray-600">
