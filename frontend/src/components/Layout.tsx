@@ -27,32 +27,14 @@ const Layout = () => {
             </div>
 
             <div className="flex items-center space-x-2 sm:space-x-4">
-              <Link
-                to="/database-setup"
-                className="text-gray-500 hover:text-gray-700 text-sm"
+              <span className="text-xs sm:text-sm text-gray-700 hidden sm:inline">Welkom, {user?.name}</span>
+              <button
+                onClick={handleLogout}
+                className="text-gray-500 hover:text-gray-700 flex items-center space-x-1 p-1"
               >
-                DB Setup
-              </Link>
-              
-              <Link
-                to="/match-nights/new"
-                className="btn-primary flex items-center space-x-2 text-sm sm:text-base"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Nieuwe Avond</span>
-                <span className="sm:hidden">+</span>
-              </Link>
-
-              <div className="flex items-center space-x-2 sm:space-x-4">
-                <span className="text-xs sm:text-sm text-gray-700 hidden sm:inline">Welkom, {user?.name}</span>
-                <button
-                  onClick={handleLogout}
-                  className="text-gray-500 hover:text-gray-700 flex items-center space-x-1 p-1"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span className="hidden sm:inline">Uitloggen</span>
-                </button>
-              </div>
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Uitloggen</span>
+              </button>
             </div>
           </div>
         </div>

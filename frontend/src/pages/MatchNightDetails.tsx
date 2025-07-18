@@ -84,15 +84,7 @@ const MatchNightDetails = () => {
     }
   };
 
-  const handleDebugMatches = async () => {
-    try {
-      const response = await matchNightsAPI.debugMatches(parseInt(id!));
-      setDebugMatches(response.data);
-      console.log('Debug matches:', response.data);
-    } catch (err: any) {
-      console.error('Error debugging matches:', err);
-    }
-  };
+
 
   const handleStopGame = async () => {
     try {
@@ -277,12 +269,25 @@ const MatchNightDetails = () => {
       setStartingGame(true);
       setError(''); // Clear any previous errors
       
-      console.log('Starting game with mode:', gameMode);
-      const response = await gameSchemasAPI.startGame(parseInt(id!), gameMode);
-      console.log('Game start response:', response.data);
+      console.log('Starting new game with mode:', gameMode);
       
-      await fetchMatchNight(); // Refresh data
+      // Als er al een actief spel is, eerst alle resultaten wissen
+      if (gameStatus?.game_active) {
+        console.log('Clearing existing matches and results...');
+        await matchNightsAPI.clearMatches(parseInt(id!));
+        console.log('Existing matches and results cleared');
+        
+        // Reset game status om oude data te voorkomen
+        setGameStatus(null);
+      }
+      
+      // Start nieuw spel
+      const response = await gameSchemasAPI.startGame(parseInt(id!), gameMode);
+      console.log('New game start response:', response.data);
+      
+      // Volledig verversen van alle data - eerst game status, dan match night
       await fetchGameStatus(); // Refresh game status
+      await fetchMatchNight(); // Force refresh match night data
       setShowGameModal(false);
       
       // Show success message with details
@@ -386,6 +391,23 @@ const MatchNightDetails = () => {
         </div>
       )}
 
+      {/* Game Status - bovenaan voor directe zichtbaarheid */}
+      {gameStatus && gameStatus.game_active && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center space-x-2 mb-2">
+            <Play className="w-5 h-5 text-green-600" />
+            <span className="font-medium text-green-800">
+              {gameStatus.game_schema.game_mode === 'everyone_vs_everyone' 
+                ? 'Iedereen tegen iedereen' 
+                : 'King of the Court'}
+            </span>
+          </div>
+          <p className="text-sm text-green-700">
+            Spel gestart op: {new Date(gameStatus.game_schema.created_at).toLocaleString('nl-NL')}
+          </p>
+        </div>
+      )}
+
       {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card">
@@ -433,53 +455,22 @@ const MatchNightDetails = () => {
           </button>
         )}
 
-        {/* Stop Game button - alleen voor creator */}
+        {/* Nieuw Spel Starten button - alleen voor creator */}
         {isCreator() && gameStatus?.game_active && (
           <button
-            onClick={handleStopGame}
-            disabled={stoppingGame}
+            onClick={() => setShowGameModal(true)}
+            disabled={startingGame}
             className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
           >
             <Play className="w-4 h-4" />
-            <span>{stoppingGame ? 'Stoppen...' : 'Stop Spel'}</span>
+            <span>{startingGame ? 'Starten...' : 'Nieuw Spel Starten'}</span>
           </button>
         )}
 
-        {/* Force Stop button - altijd zichtbaar voor debugging */}
-        {isCreator() && (
-          <button
-            onClick={handleStopGame}
-            disabled={stoppingGame}
-            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
-          >
-            <Play className="w-4 h-4" />
-            <span>{stoppingGame ? 'Stoppen...' : 'Force Stop'}</span>
-          </button>
-        )}
 
-        {/* Clear Matches button - alleen voor creator */}
-        {isCreator() && (
-          <button
-            onClick={handleClearMatches}
-            disabled={clearingMatches}
-            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
-          >
-            <Database className="w-4 h-4" />
-            <span>{clearingMatches ? 'Wissen...' : 'Clear Matches'}</span>
-          </button>
-        )}
 
-        {/* Debug matches button */}
-        <button
-          onClick={handleDebugMatches}
-          className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
-        >
-          <Database className="w-4 h-4" />
-          <span>Debug Matches</span>
-        </button>
-
-        {/* Afmeld knop - alleen voor deelnemers */}
-        {isParticipating() && (
+        {/* Afmeld knop - alleen voor deelnemers, niet tijdens actief spel */}
+        {isParticipating() && !gameStatus?.game_active && (
           <button
             onClick={handleLeave}
             disabled={joining}
@@ -503,8 +494,8 @@ const MatchNightDetails = () => {
         )}
       </div>
 
-      {/* Add Participant Section - alleen voor creator */}
-      {isCreator() && (
+      {/* Add Participant Section - alleen voor creator, niet tijdens actief spel */}
+      {isCreator() && !gameStatus?.game_active && (
         <div className="card">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Deelnemer Toevoegen</h2>
           <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
@@ -542,100 +533,65 @@ const MatchNightDetails = () => {
         </div>
       )}
 
-      {/* Participants */}
-      <div className="card">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Deelnemers</h2>
-        {matchNight.participants && matchNight.participants.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {matchNight.participants.map((participant: User) => (
-              <div key={participant.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-medium">
-                      {participant.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">{participant.name}</p>
-                    <p className="text-sm text-gray-500">{participant.email}</p>
-                  </div>
-                </div>
-                {/* Alleen creator kan deelnemers verwijderen */}
-                {isCreator() && (
-                  <button
-                    onClick={() => handleRemoveParticipant(participant.id)}
-                    className="text-red-600 hover:text-red-800 p-1"
-                    title="Verwijder deelnemer"
-                  >
-                    <UserMinus className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-500 text-center py-4">Nog geen deelnemers</p>
-        )}
-      </div>
-
-      {/* Game Status */}
-      {gameStatus && gameStatus.game_active && (
+      {/* Participants - alleen zichtbaar als er geen actief spel is */}
+      {!gameStatus?.game_active && (
         <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Actief Spel</h2>
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-2">
-              <Play className="w-5 h-5 text-green-600" />
-              <span className="font-medium text-green-800">
-                {gameStatus.game_schema.game_mode === 'everyone_vs_everyone' 
-                  ? 'Iedereen tegen iedereen' 
-                  : 'King of the Court'}
-              </span>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Deelnemers</h2>
+          {matchNight.participants && matchNight.participants.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {matchNight.participants.map((participant: User) => (
+                <div key={participant.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
+                      <span className="text-white text-sm font-medium">
+                        {participant.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{participant.name}</p>
+                      <p className="text-sm text-gray-500">{participant.email}</p>
+                    </div>
+                  </div>
+                  {/* Alleen creator kan deelnemers verwijderen */}
+                  {isCreator() && (
+                    <button
+                      onClick={() => handleRemoveParticipant(participant.id)}
+                      className="text-red-600 hover:text-red-800 p-1"
+                      title="Verwijder deelnemer"
+                    >
+                      <UserMinus className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-            <p className="text-sm text-green-700">
-              Spel gestart op: {new Date(gameStatus.game_schema.created_at).toLocaleString('nl-NL')}
-            </p>
-          </div>
+          ) : (
+            <p className="text-gray-500 text-center py-4">Nog geen deelnemers</p>
+          )}
         </div>
       )}
+
+
 
       {/* Matches */}
       <div className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Wedstrijden</h2>
-        
-        {/* Debug info */}
-        <div className="mb-4 p-3 bg-gray-100 rounded text-sm">
-          <p>Debug: {matchNight.matches ? matchNight.matches.length : 0} wedstrijden gevonden</p>
-          <p>Game Status: {gameStatus ? (gameStatus.game_active ? 'Actief' : 'Niet actief') : 'Onbekend'}</p>
-          {matchNight.matches && matchNight.matches.length > 0 && (
-            <p>Eerste wedstrijd: {JSON.stringify(matchNight.matches[0])}</p>
-          )}
-          {debugMatches && (
-            <div className="mt-2">
-              <p className="font-bold">Debug Matches Response:</p>
-              <p>Match Night ID: {debugMatches.match_night_id}</p>
-              <p>Matches Count: {debugMatches.matches_count}</p>
-              {debugMatches.matches && debugMatches.matches.length > 0 && (
-                <div>
-                  <p className="font-bold">Matches:</p>
-                  {debugMatches.matches.map((match: any, index: number) => (
-                    <div key={index} className="ml-2">
-                      <p>Match {index + 1}: {match.player1_name} & {match.player2_name} vs {match.player3_name} & {match.player4_name}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
         
         {matchNight.matches && matchNight.matches.length > 0 ? (
           <div className="space-y-4">
             {matchNight.matches.map((match: Match) => (
               <div key={match.id} className="border rounded-lg p-4">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-700">
-                    Ronde {match.round} - Baan {match.court}
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      Ronde {match.round} - Baan {match.court}
+                    </span>
+                    {match.is_naai_partij && (
+                      <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded-full">
+                        NAAI-PARTIJ
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center space-x-2">
                     {match.result && (
                       <div className="flex items-center space-x-2">
@@ -643,16 +599,19 @@ const MatchNightDetails = () => {
                           <Trophy className="w-4 h-4 mr-1" />
                           <span className="text-sm">Voltooid</span>
                         </div>
-                        <button
-                          onClick={() => handleAddResult(match)}
-                          className="btn-secondary flex items-center space-x-1 text-xs"
-                        >
-                          <Edit className="w-3 h-3" />
-                          <span>Bewerken</span>
-                        </button>
+                        {/* Alleen creator kan bewerken */}
+                        {isCreator() && (
+                          <button
+                            onClick={() => handleAddResult(match)}
+                            className="btn-secondary flex items-center space-x-1 text-xs"
+                          >
+                            <Edit className="w-3 h-3" />
+                            <span>Bewerken</span>
+                          </button>
+                        )}
                       </div>
                     )}
-                    {!match.result && (
+                    {!match.result && isCreator() && (
                       <button
                         onClick={() => handleAddResult(match)}
                         className="btn-primary flex items-center space-x-1 text-xs"
@@ -706,7 +665,9 @@ const MatchNightDetails = () => {
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">Kies Speltype</h2>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {gameStatus?.game_active ? 'Nieuw Spel Starten' : 'Kies Speltype'}
+                </h2>
                 <button
                   onClick={() => setShowGameModal(false)}
                   className="text-gray-400 hover:text-gray-600"
@@ -717,6 +678,14 @@ const MatchNightDetails = () => {
                 </button>
               </div>
 
+              {gameStatus?.game_active && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Let op:</strong> Het starten van een nieuw spel zal alle bestaande resultaten wissen.
+                  </p>
+                </div>
+              )}
+              
               <div className="space-y-4">
                 {gameModes.map((mode) => (
                   <button

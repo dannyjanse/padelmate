@@ -107,6 +107,12 @@ class Match(db.Model):
         player2 = User.query.get(self.player2_id)
         player3 = User.query.get(self.player3_id)
         player4 = User.query.get(self.player4_id)
+        
+        # Check if this is a naai-partij (last match for 6 or 7 players)
+        is_naai_partij = False
+        if self.round >= 8:  # Naai-partijen zijn altijd de laatste wedstrijden
+            is_naai_partij = True
+        
         return {
             'id': self.id,
             'match_night_id': self.match_night_id,
@@ -120,6 +126,7 @@ class Match(db.Model):
             'player4_name': player4.name if player4 else None,
             'round': self.round,
             'court': self.court,
+            'is_naai_partij': is_naai_partij,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'result': self.result.to_dict() if self.result else None
         }

@@ -13,9 +13,7 @@ const Dashboard = () => {
   const [matchNights, setMatchNights] = useState<MatchNight[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [reinitializing, setReinitializing] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
-  const [fixingSchema, setFixingSchema] = useState(false);
+
 
   useEffect(() => {
     fetchMatchNights();
@@ -34,43 +32,7 @@ const Dashboard = () => {
     }
   };
 
-  const handleReinitializeDatabase = async () => {
-    try {
-      setReinitializing(true);
-      await authAPI.reinitializeDatabase();
-      await fetchMatchNights(); // Refresh data
-      setError(''); // Clear any previous errors
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Fout bij het opnieuw initialiseren van database');
-    } finally {
-      setReinitializing(false);
-    }
-  };
 
-  const handleDebugDatabase = async () => {
-    try {
-      const response = await authAPI.debugDatabase();
-      setDebugInfo(response.data);
-      console.log('Debug info:', response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Fout bij debug database');
-    }
-  };
-
-  const handleFixSchema = async () => {
-    try {
-      setFixingSchema(true);
-      await authAPI.fixSchema();
-      setError(''); // Clear any previous errors
-      // Refresh debug info
-      const response = await authAPI.debugDatabase();
-      setDebugInfo(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Fout bij het repareren van database schema');
-    } finally {
-      setFixingSchema(false);
-    }
-  };
 
   const formatDate = (dateString: string) => {
     try {
@@ -101,35 +63,6 @@ const Dashboard = () => {
         </div>
         
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-          {/* Debug button */}
-          <button
-            onClick={handleDebugDatabase}
-            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
-          >
-            <Database className="w-4 h-4" />
-            <span>Debug DB</span>
-          </button>
-          
-          {/* Fix Schema button */}
-          <button
-            onClick={handleFixSchema}
-            disabled={fixingSchema}
-            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
-          >
-            <Database className="w-4 h-4" />
-            <span>{fixingSchema ? 'Repareren...' : 'Fix Schema'}</span>
-          </button>
-          
-          {/* Temporary database reinit button */}
-          <button
-            onClick={handleReinitializeDatabase}
-            disabled={reinitializing}
-            className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto"
-          >
-            <Database className="w-4 h-4" />
-            <span>{reinitializing ? 'Reinitialiseren...' : 'DB Reinit'}</span>
-          </button>
-          
           <button
             onClick={() => navigate('/match-nights/create')}
             className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
@@ -147,26 +80,7 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Debug info */}
-      {debugInfo && (
-        <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded-md">
-          <h3 className="font-bold mb-2">Debug Database Info:</h3>
-          <p>Users: {debugInfo.users_count}</p>
-          <p>Match Nights: {debugInfo.match_nights_count}</p>
-          <p>Participations: {debugInfo.participations_count}</p>
-          <p>Matches: {debugInfo.matches_count}</p>
-          {debugInfo.match_nights && debugInfo.match_nights.length > 0 && (
-            <div className="mt-2">
-              <p className="font-bold">Match Nights:</p>
-              {debugInfo.match_nights.map((mn: any, index: number) => (
-                <p key={index} className="text-sm">
-                  ID: {mn.id}, Date: {mn.date}, Location: {mn.location}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+
 
       {/* Match Nights */}
       <div className="space-y-4">

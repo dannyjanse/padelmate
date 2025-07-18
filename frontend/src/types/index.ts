@@ -39,6 +39,7 @@ export interface Match {
   player4_name?: string;
   round: number;
   court: number;
+  is_naai_partij?: boolean;
   created_at: string;
   result?: MatchResult;
   player1?: User;

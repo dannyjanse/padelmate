@@ -1345,6 +1345,12 @@ def generate_everyone_vs_everyone_matches(match_night, game_schema):
     for round_num, match_pairs in enumerate(schedule, 1):
         if len(match_pairs) == 2:  # One match per round
             pair1, pair2 = match_pairs
+            
+            # Check if this is a naai-partij (last match for 6 or 7 players)
+            is_naai_partij = False
+            if len(participant_ids) in [6, 7] and round_num == len(schedule):
+                is_naai_partij = True
+            
             match = Match(
                 match_night_id=match_night.id,
                 game_schema_id=game_schema.id,
@@ -1357,7 +1363,9 @@ def generate_everyone_vs_everyone_matches(match_night, game_schema):
             )
             matches.append(match)
             db.session.add(match)
-            print(f"Created match {round_num}: {pair1[0]}&{pair1[1]} vs {pair2[0]}&{pair2[1]}")
+            
+            match_type = "NAAI-PARTIJ" if is_naai_partij else "Normal"
+            print(f"Created match {round_num} ({match_type}): {pair1[0]}&{pair1[1]} vs {pair2[0]}&{pair2[1]}")
     
     try:
         db.session.commit()
@@ -1380,9 +1388,9 @@ def create_4_player_schedule(players):
     ]
 
 def create_5_player_schedule(players):
-    """Create schedule for 5 players: 5 matches, 10 pairs play (5 pairs don't play)"""
+    """Create schedule for 5 players: 5 matches, all 10 pairs play exactly once"""
     # All possible pairs: (1,2), (1,3), (1,4), (1,5), (2,3), (2,4), (2,5), (3,4), (3,5), (4,5)
-    # Schedule: 5 matches, each player plays 4 times, rests 1 time
+    # Schedule: 5 matches, each pair plays exactly once
     return [
         [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4 (5 rests)
         [(players[0], players[2]), (players[1], players[4])],  # 1&3 vs 2&5 (4 rests)
@@ -1392,9 +1400,9 @@ def create_5_player_schedule(players):
     ]
 
 def create_6_player_schedule(players):
-    """Create schedule for 6 players: 8 matches, 16 pairs play (1 pair doesn't play)"""
+    """Create schedule for 6 players: 8 matches, all 15 pairs play exactly once + naai-partij"""
     # All possible pairs: (1,2), (1,3), (1,4), (1,5), (1,6), (2,3), (2,4), (2,5), (2,6), (3,4), (3,5), (3,6), (4,5), (4,6), (5,6)
-    # Schedule: 8 matches, each player plays 5-6 times, rests 2-3 times
+    # Schedule: 8 matches, each pair plays exactly once, plus naai-partij for the remaining pair
     return [
         [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4 (5,6 rest)
         [(players[0], players[2]), (players[1], players[4])],  # 1&3 vs 2&5 (3,6 rest)
@@ -1403,23 +1411,24 @@ def create_6_player_schedule(players):
         [(players[0], players[5]), (players[1], players[2])],  # 1&6 vs 2&3 (4,5 rest)
         [(players[1], players[5]), (players[2], players[4])],  # 2&6 vs 3&5 (1,4 rest)
         [(players[2], players[5]), (players[3], players[4])],  # 3&6 vs 4&5 (1,2 rest)
-        [(players[3], players[5]), (players[0], players[1])]   # 4&6 vs 1&2 (3,5 rest) - Note: 1&2 plays twice, but this is acceptable for 6 players
+        [(players[3], players[5]), (players[0], players[1])]   # NAAI-PARTIJ: 4&6 vs 1&2 (3,5 rest) - 4&6 speelt extra, resultaat telt alleen voor 4&6
     ]
 
 def create_7_player_schedule(players):
-    """Create schedule for 7 players: 10 matches, 20 pairs play (1 pair doesn't play)"""
-    # All possible pairs: 21 total, we use 20 pairs in 10 matches
+    """Create schedule for 7 players: 11 matches, all 21 pairs play exactly once + naai-partij"""
+    # All possible pairs: 21 total, we use all 21 pairs in 11 matches including naai-partij
     return [
         [(players[0], players[1]), (players[2], players[3])],  # 1&2 vs 3&4 (5,6,7 rest)
         [(players[0], players[2]), (players[1], players[4])],  # 1&3 vs 2&5 (3,6,7 rest)
         [(players[0], players[3]), (players[2], players[4])],  # 1&4 vs 3&5 (2,6,7 rest)
         [(players[0], players[4]), (players[1], players[3])],  # 1&5 vs 2&4 (3,6,7 rest)
         [(players[0], players[5]), (players[1], players[2])],  # 1&6 vs 2&3 (4,5,7 rest)
-        [(players[0], players[6]), (players[2], players[5])],  # 1&7 vs 3&6 (2,4,5 rest)
-        [(players[1], players[5]), (players[2], players[4])],  # 2&6 vs 3&5 (1,4,7 rest)
+        [(players[0], players[6]), (players[1], players[4])],  # 1&7 vs 2&5 (3,4,6 rest)
+        [(players[1], players[5]), (players[3], players[4])],  # 2&6 vs 4&5 (1,3,7 rest)
         [(players[1], players[6]), (players[3], players[4])],  # 2&7 vs 4&5 (1,3,6 rest)
         [(players[2], players[6]), (players[3], players[5])],  # 3&7 vs 4&6 (1,2,5 rest)
-        [(players[4], players[6]), (players[5], players[6])]   # 5&7 vs 6&7 (1,2,3 rest) - Note: 6&7 plays twice, but this is acceptable for 7 players
+        [(players[4], players[6]), (players[5], players[6])],  # 5&7 vs 6&7 (1,2,3 rest)
+        [(players[3], players[6]), (players[0], players[1])]   # NAAI-PARTIJ: 4&7 vs 1&2 (3,5,6 rest) - 4&7 speelt extra, resultaat telt alleen voor 4&7
     ]
 
 def create_8_player_schedule(players):
