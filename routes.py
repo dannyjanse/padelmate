@@ -2066,7 +2066,7 @@ def generate_king_of_the_court_matches(match_night, game_schema):
             player2_id=participant_ids[1],
             player3_id=participant_ids[2],
             player4_id=participant_ids[3],
-            round=1,
+            round=1,  # Start with round 1
             court=1
         )
         matches.append(match)
@@ -2105,6 +2105,23 @@ def generate_next_king_of_the_court_match(completed_match):
         participants = Participation.query.filter_by(match_night_id=completed_match.match_night_id).all()
         all_participant_ids = [p.user_id for p in participants]
         
+        # Determine maximum rounds based on number of players
+        max_rounds = 0
+        if len(all_participant_ids) == 4:
+            max_rounds = 3
+        elif len(all_participant_ids) == 5:
+            max_rounds = 5
+        elif len(all_participant_ids) == 6:
+            max_rounds = 8  # Including naai-partij
+        elif len(all_participant_ids) == 7:
+            max_rounds = 11  # Including naai-partij
+        elif len(all_participant_ids) == 8:
+            max_rounds = 14
+        
+        # Check if we've reached the maximum rounds
+        if completed_match.round >= max_rounds:
+            return None
+        
         # Create queue: winners stay, losers go to end of queue
         queue = winners + [p for p in all_participant_ids if p not in winners and p not in losers] + losers
         
@@ -2118,7 +2135,7 @@ def generate_next_king_of_the_court_match(completed_match):
                 player2_id=queue[2],  # First player from queue
                 player3_id=queue[1],  # Second winner
                 player4_id=queue[3],  # Second player from queue
-                round=completed_match.round + 1,
+                round=completed_match.round + 1,  # Increment round number
                 court=completed_match.court
             )
             
