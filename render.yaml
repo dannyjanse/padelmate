@@ -1,11 +1,11 @@
 services:
-  # Force redeploy - Backend service
+  # Backend service
   - type: web
     name: padelmate-backend
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt && cd backend && echo "Backend build completed successfully"
-    startCommand: cd backend && gunicorn app:app --bind 0.0.0.0:$PORT
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.16
@@ -20,19 +20,7 @@ services:
       - key: FLASK_DEBUG
         value: false
 
-  - type: web
-    name: padelmate-frontend
-    env: static
-    plan: free
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/dist
-    envVars:
-      - key: VITE_API_URL
-        value: https://api.kingofthecourt.onrender.com
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+
 
 databases:
   - name: padelmate-db
