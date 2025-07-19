@@ -1715,25 +1715,30 @@ def generate_everyone_vs_everyone_matches(match_night, game_schema):
     if len(participant_ids) not in [4, 5, 6, 7, 8]:
         return []
     
+    # Shuffle participant IDs to get random player assignments
+    # This ensures different schedules each time while keeping the same algorithm
+    shuffled_participant_ids = participant_ids.copy()
+    random.shuffle(shuffled_participant_ids)
+    
     # Generate all possible unique pairs
-    all_pairs = list(combinations(participant_ids, 2))
+    all_pairs = list(combinations(shuffled_participant_ids, 2))
     
     # Create schedule based on number of players
-    if len(participant_ids) == 4:
+    if len(shuffled_participant_ids) == 4:
         # For 4 players: 3 matches, all pairs play
-        schedule = create_4_player_schedule(participant_ids)
-    elif len(participant_ids) == 5:
+        schedule = create_4_player_schedule(shuffled_participant_ids)
+    elif len(shuffled_participant_ids) == 5:
         # For 5 players: 5 matches, 10 pairs play (5 pairs don't play)
-        schedule = create_5_player_schedule(participant_ids)
-    elif len(participant_ids) == 6:
+        schedule = create_5_player_schedule(shuffled_participant_ids)
+    elif len(shuffled_participant_ids) == 6:
         # For 6 players: 8 matches, 16 pairs play (1 pair doesn't play)
-        schedule = create_6_player_schedule(participant_ids)
-    elif len(participant_ids) == 7:
+        schedule = create_6_player_schedule(shuffled_participant_ids)
+    elif len(shuffled_participant_ids) == 7:
         # For 7 players: 10 matches, 20 pairs play (1 pair doesn't play)
-        schedule = create_7_player_schedule(participant_ids)
-    elif len(participant_ids) == 8:
+        schedule = create_7_player_schedule(shuffled_participant_ids)
+    elif len(shuffled_participant_ids) == 8:
         # For 8 players: 14 matches, 28 pairs play (all pairs play)
-        schedule = create_8_player_schedule(participant_ids)
+        schedule = create_8_player_schedule(shuffled_participant_ids)
     
     # Create matches from schedule
     matches = []
