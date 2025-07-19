@@ -1770,76 +1770,155 @@ def generate_everyone_vs_everyone_matches(match_night, game_schema):
     return matches
 
 def create_4_player_schedule(players):
-    """Create random schedule for 4 players: 3 matches, all pairs play"""
-    # Generate all possible pairs
-    all_pairs = list(combinations(players, 2))
-    random.shuffle(all_pairs)
+    """Create schedule for 4 players: 3 matches, all pairs play"""
+    # For 4 players, we have exactly 6 pairs and need 3 matches
+    # Each player should play exactly 3 times
+    pairs = list(combinations(players, 2))
     
-    # Create 3 matches from the 6 possible pairs
-    schedule = []
-    for i in range(0, len(all_pairs), 2):
-        if i + 1 < len(all_pairs):
-            schedule.append([all_pairs[i], all_pairs[i + 1]])
+    # Create balanced schedule
+    schedule = [
+        [pairs[0], pairs[1]],  # Match 1: (0,1) vs (2,3)
+        [pairs[2], pairs[3]],  # Match 2: (0,2) vs (1,3)  
+        [pairs[4], pairs[5]]   # Match 3: (0,3) vs (1,2)
+    ]
     
     return schedule
 
 def create_5_player_schedule(players):
-    """Create random schedule for 5 players: 5 matches, all 10 pairs play exactly once"""
-    # Generate all possible pairs
-    all_pairs = list(combinations(players, 2))
-    random.shuffle(all_pairs)
+    """Create schedule for 5 players: 5 matches, all 10 pairs play exactly once"""
+    # For 5 players, we have exactly 10 pairs and need 5 matches
+    # Each player should play exactly 4 times
+    pairs = list(combinations(players, 2))
     
-    # Create 5 matches from the 10 possible pairs
+    # Create balanced schedule ensuring no player plays twice in same match
     schedule = []
-    for i in range(0, len(all_pairs), 2):
-        if i + 1 < len(all_pairs):
-            schedule.append([all_pairs[i], all_pairs[i + 1]])
+    used_pairs = set()
+    
+    for i in range(5):
+        # Find two pairs that don't share any players
+        pair1 = None
+        pair2 = None
+        
+        for j, pair in enumerate(pairs):
+            if pair not in used_pairs:
+                if pair1 is None:
+                    pair1 = pair
+                    used_pairs.add(pair)
+                elif pair2 is None:
+                    # Check if pair2 shares any players with pair1
+                    if not (pair[0] in pair1 or pair[1] in pair1):
+                        pair2 = pair
+                        used_pairs.add(pair)
+                        break
+        
+        if pair1 and pair2:
+            schedule.append([pair1, pair2])
     
     return schedule
 
 def create_6_player_schedule(players):
-    """Create random schedule for 6 players: 8 matches, all 15 pairs play exactly once + naai-partij"""
-    # Generate all possible pairs
-    all_pairs = list(combinations(players, 2))
-    random.shuffle(all_pairs)
+    """Create schedule for 6 players: 8 matches, all 15 pairs play exactly once + naai-partij"""
+    # For 6 players, we have exactly 15 pairs and need 8 matches
+    # Each player should play exactly 5 times
+    pairs = list(combinations(players, 2))
     
-    # Create 7 regular matches from the first 14 pairs
+    # Create balanced schedule for first 7 matches
     schedule = []
-    for i in range(0, 14, 2):
-        schedule.append([all_pairs[i], all_pairs[i + 1]])
+    used_pairs = set()
     
-    # Add naai-partij with the last pair vs the first pair
-    schedule.append([all_pairs[14], all_pairs[0]])
+    for i in range(7):
+        # Find two pairs that don't share any players
+        pair1 = None
+        pair2 = None
+        
+        for j, pair in enumerate(pairs):
+            if pair not in used_pairs:
+                if pair1 is None:
+                    pair1 = pair
+                    used_pairs.add(pair)
+                elif pair2 is None:
+                    # Check if pair2 shares any players with pair1
+                    if not (pair[0] in pair1 or pair[1] in pair1):
+                        pair2 = pair
+                        used_pairs.add(pair)
+                        break
+        
+        if pair1 and pair2:
+            schedule.append([pair1, pair2])
+    
+    # Add naai-partij with remaining pair vs first pair
+    remaining_pairs = [p for p in pairs if p not in used_pairs]
+    if remaining_pairs:
+        schedule.append([remaining_pairs[0], pairs[0]])
     
     return schedule
 
 def create_7_player_schedule(players):
-    """Create random schedule for 7 players: 11 matches, all 21 pairs play exactly once + naai-partij"""
-    # Generate all possible pairs
-    all_pairs = list(combinations(players, 2))
-    random.shuffle(all_pairs)
+    """Create schedule for 7 players: 11 matches, all 21 pairs play exactly once + naai-partij"""
+    # For 7 players, we have exactly 21 pairs and need 11 matches
+    # Each player should play exactly 6 times
+    pairs = list(combinations(players, 2))
     
-    # Create 10 regular matches from the first 20 pairs
+    # Create balanced schedule for first 10 matches
     schedule = []
-    for i in range(0, 20, 2):
-        schedule.append([all_pairs[i], all_pairs[i + 1]])
+    used_pairs = set()
     
-    # Add naai-partij with the last pair vs the first pair
-    schedule.append([all_pairs[20], all_pairs[0]])
+    for i in range(10):
+        # Find two pairs that don't share any players
+        pair1 = None
+        pair2 = None
+        
+        for j, pair in enumerate(pairs):
+            if pair not in used_pairs:
+                if pair1 is None:
+                    pair1 = pair
+                    used_pairs.add(pair)
+                elif pair2 is None:
+                    # Check if pair2 shares any players with pair1
+                    if not (pair[0] in pair1 or pair[1] in pair1):
+                        pair2 = pair
+                        used_pairs.add(pair)
+                        break
+        
+        if pair1 and pair2:
+            schedule.append([pair1, pair2])
+    
+    # Add naai-partij with remaining pair vs first pair
+    remaining_pairs = [p for p in pairs if p not in used_pairs]
+    if remaining_pairs:
+        schedule.append([remaining_pairs[0], pairs[0]])
     
     return schedule
 
 def create_8_player_schedule(players):
-    """Create random schedule for 8 players: 14 matches, all 28 pairs play"""
-    # Generate all possible pairs
-    all_pairs = list(combinations(players, 2))
-    random.shuffle(all_pairs)
+    """Create schedule for 8 players: 14 matches, all 28 pairs play"""
+    # For 8 players, we have exactly 28 pairs and need 14 matches
+    # Each player should play exactly 7 times
+    pairs = list(combinations(players, 2))
     
-    # Create 14 matches from all 28 pairs
+    # Create balanced schedule ensuring no player plays twice in same match
     schedule = []
-    for i in range(0, len(all_pairs), 2):
-        if i + 1 < len(all_pairs):
-            schedule.append([all_pairs[i], all_pairs[i + 1]])
+    used_pairs = set()
+    
+    for i in range(14):
+        # Find two pairs that don't share any players
+        pair1 = None
+        pair2 = None
+        
+        for j, pair in enumerate(pairs):
+            if pair not in used_pairs:
+                if pair1 is None:
+                    pair1 = pair
+                    used_pairs.add(pair)
+                elif pair2 is None:
+                    # Check if pair2 shares any players with pair1
+                    if not (pair[0] in pair1 or pair[1] in pair1):
+                        pair2 = pair
+                        used_pairs.add(pair)
+                        break
+        
+        if pair1 and pair2:
+            schedule.append([pair1, pair2])
     
     return schedule
 
