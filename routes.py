@@ -2059,13 +2059,18 @@ def generate_king_of_the_court_matches(match_night, game_schema):
     # For king of the court, we start with one match
     # Winners stay, losers go to queue
     if len(participant_ids) >= 4:
+        # Shuffle participant IDs to get random player assignments
+        # This ensures different first matches each time while keeping the same algorithm
+        shuffled_participant_ids = participant_ids.copy()
+        random.shuffle(shuffled_participant_ids)
+        
         match = Match(
             match_night_id=match_night.id,
             game_schema_id=game_schema.id,
-            player1_id=participant_ids[0],
-            player2_id=participant_ids[1],
-            player3_id=participant_ids[2],
-            player4_id=participant_ids[3],
+            player1_id=shuffled_participant_ids[0],
+            player2_id=shuffled_participant_ids[1],
+            player3_id=shuffled_participant_ids[2],
+            player4_id=shuffled_participant_ids[3],
             round=1,  # Start with round 1
             court=1
         )
