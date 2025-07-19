@@ -1,10 +1,9 @@
-# 🏓 PadelMate
+# 🏓 PadelMate Backend
 
-Een webapplicatie voor padelgroepen om speelavonden te plannen, speelschema's te genereren en scores bij te houden.
+De backend API voor de PadelMate applicatie. Dit is de Flask API die de frontend van data voorziet.
 
 ## 🚀 Technische Stack
 
-- **Frontend**: React + TypeScript + Vite
 - **Backend**: Flask (Python)
 - **Database**: PostgreSQL
 - **Authenticatie**: Flask-Login
@@ -16,7 +15,6 @@ Een webapplicatie voor padelgroepen om speelavonden te plannen, speelschema's te
 ```
 padelmate/
 ├── backend/          # Flask API
-├── frontend/         # React App
 ├── docs/            # Documentatie
 └── README.md        # Dit bestand
 ```
@@ -32,12 +30,8 @@ pip install -r requirements.txt
 flask run
 ```
 
-### Frontend (React)
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### Frontend
+De frontend is nu een apart project: [padelmate-frontend](https://github.com/dannyjanse/padelmate-frontend)
 
 ## 📋 MVP Features
 

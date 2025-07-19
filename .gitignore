@@ -44,15 +44,15 @@ instance/
 .env.test.local
 .env.production.local
 
-# Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Node.js (removed - frontend is now separate)
+# node_modules/
+# npm-debug.log*
+# yarn-debug.log*
+# yarn-error.log*
 
-# React
-frontend/dist/
-frontend/build/
+# React (removed - frontend is now separate)
+# frontend/dist/
+# frontend/build/
 
 # IDE
 .vscode/
