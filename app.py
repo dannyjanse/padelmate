@@ -30,8 +30,12 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = None  # Disable redirect for API
 
-# Enable CORS
-CORS(app, supports_credentials=True)
+# Enable CORS with specific origins
+CORS(app, 
+     origins=['https://padelmate-frontendapp.onrender.com', 'http://localhost:3000'],
+     supports_credentials=True,
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     allow_headers=['Content-Type', 'Authorization'])
 
 # Import models after db initialization
 from models import User, MatchNight, Participation, Match, MatchResult, GameSchema
